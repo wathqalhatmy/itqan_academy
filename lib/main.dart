@@ -3,12 +3,17 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
 import 'providers/academy_provider.dart';
+import 'providers/auth_provider.dart';
 import 'screens/dashboard/dashboard_screen.dart';
+import 'screens/auth/login_screen.dart';
 
 void main() {
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AcademyProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AcademyProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+      ],
       child: const ItqanAcademyApp(),
     ),
   );
@@ -55,8 +60,15 @@ class ItqanAcademyAppState extends State<ItqanAcademyApp> {
       darkTheme: AppTheme.darkTheme,
       themeMode: _themeMode,
 
-      // الشاشة الرئيسية للتطبيق
-      home: const DashboardScreen(),
+      // الشاشة الرئيسية للتطبيق مع حماية الدخول
+      home: Consumer<AuthProvider>(
+        builder: (context, auth, _) {
+          if (auth.isAuthenticated) {
+            return const DashboardScreen();
+          }
+          return const LoginScreen();
+        },
+      ),
     );
   }
 }

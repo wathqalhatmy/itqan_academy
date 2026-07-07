@@ -10,6 +10,7 @@ import '../../core/widgets/level_badge.dart';
 import '../../core/widgets/search_field.dart';
 import '../../main.dart';
 import '../../providers/academy_provider.dart';
+import '../../providers/auth_provider.dart';
 import '../circles/circle_detail_screen.dart';
 import '../students/student_detail_screen.dart';
 import '../reports/reports_screen.dart';
@@ -74,6 +75,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   onPressed: () => ItqanAcademyApp.of(context).toggleTheme(),
                   tooltip: 'تغيير المظهر',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.logout_rounded, color: Colors.white),
+                  onPressed: () => _showLogoutDialog(context),
+                  tooltip: 'تسجيل الخروج',
                 ),
               ],
             ),
@@ -695,6 +701,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
               );
             },
             child: const Text('حذف نهائي'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('تسجيل الخروج', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('هل أنت متأكد من رغبتك في تسجيل الخروج من النظام؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              Provider.of<AuthProvider>(context, listen: false).logout();
+            },
+            child: const Text('خروج'),
           ),
         ],
       ),
