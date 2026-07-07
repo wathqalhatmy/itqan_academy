@@ -426,7 +426,8 @@ class _CircleDetailScreenState extends State<CircleDetailScreen> {
                 return FutureBuilder<List<Attendance>>(
                   future: prov.getAttendanceForDateAndCircle(circle.id, today),
                   builder: (context, snapshot) {
-                    final attendance = snapshot.data?.firstWhere(
+                    final List<Attendance>? data = snapshot.data;
+                    final attendance = data?.firstWhere(
                           (a) => a.studentId == student.id,
                           orElse: () => Attendance(
                               id: '',
@@ -446,8 +447,9 @@ class _CircleDetailScreenState extends State<CircleDetailScreen> {
                       return const SizedBox.shrink();
                     }
 
+                    final AttendanceStatus status = attendance.status;
                     final (Color statusColor, IconData statusIcon) =
-                        switch (attendance.status) {
+                        switch (status) {
                       AttendanceStatus.present => (
                           AppTheme.successGreen,
                           Icons.check_circle_rounded

@@ -96,7 +96,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
                               ),
                               title: Text(student.name, style: const TextStyle(fontSize: 14)),
                               trailing: const Icon(Icons.picture_as_pdf_rounded, color: Colors.red, size: 20),
-                              onTap: () => _generateStudentMonthlyReport(provider, student),
+                              onTap: () async {
+                                // إظهار مؤشر تحميل بسيط
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('جاري جلب بيانات الطالب وتجهيز التقرير...'), duration: Duration(seconds: 1)),
+                                );
+                                await _generateStudentMonthlyReport(provider, student);
+                              },
                             );
                           },
                         ),
@@ -184,10 +190,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  void _generateCircleMonthlyReport(AcademyProvider provider) {
+  Future<void> _generateCircleMonthlyReport(AcademyProvider provider) async {
     if (_selectedCircle == null) return;
     
+    // إظهار مؤشر تحميل
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('جاري جلب بيانات طلاب الحلقة...'), duration: Duration(seconds: 1)),
+    );
+
     final students = provider.getStudentsForCircle(_selectedCircle!.id);
+    
+    // التأكد من تحميل بيانات جميع الطلاب لضمان دقة التقرير
+    for (var s in students) {
+      await provider.loadStudentDetails(s.id);
+    }
+
     final attendanceStats = provider.getMonthlyAttendanceStats(_selectedCircle!.id, _selectedYear, _selectedMonth);
 
     final rows = StringBuffer();
@@ -247,7 +265,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
     FileExporter.printHtmlReport(html, 'تقرير_حلقة_${_selectedCircle!.name}_$_selectedMonth');
   }
 
-  void _generateStudentMonthlyReport(AcademyProvider provider, Student student) {
+  Future<void> _generateStudentMonthlyReport(AcademyProvider provider, Student student) async {
+    await provider.loadStudentDetails(student.id);
     final performance = provider.getStudentMonthlyPerformance(student.id, _selectedYear, _selectedMonth);
     final attendanceStats = provider.getMonthlyAttendanceStats(_selectedCircle!.id, _selectedYear, _selectedMonth)[student.id] ?? {
       AttendanceStatus.present: 0,

@@ -29,6 +29,13 @@ class _StudentDetailScreenState extends State<StudentDetailScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    
+    // تحميل بيانات الطالب التفصيلية (السجلات، الاختبارات، الحضور) عند فتح الشاشة
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Provider.of<AcademyProvider>(context, listen: false).loadStudentDetails(widget.studentId);
+      }
+    });
   }
 
   @override

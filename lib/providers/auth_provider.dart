@@ -10,6 +10,7 @@ enum AuthStatus {
 
 class AuthProvider extends ChangeNotifier {
   final _storage = const FlutterSecureStorage();
+  // ignore: unused_field
   final _apiClient = ApiClient(); // يمكن تمريره عبر Constructor للحقن (Injection)
 
   AuthStatus _status = AuthStatus.unauthenticated;
