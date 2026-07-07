@@ -38,4 +38,27 @@ class Circle {
       level: level ?? this.level,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'teacherName': teacherName,
+      'studentIds': studentIds,
+      'level': level.name,
+    };
+  }
+
+  factory Circle.fromJson(Map<String, dynamic> json) {
+    return Circle(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      teacherName: json['teacherName'] as String,
+      studentIds: (json['studentIds'] as List<dynamic>?)?.map((e) => e as String).toList() ?? const [],
+      level: CircleLevel.values.firstWhere(
+        (e) => e.name == json['level'],
+        orElse: () => CircleLevel.memorization,
+      ),
+    );
+  }
 }

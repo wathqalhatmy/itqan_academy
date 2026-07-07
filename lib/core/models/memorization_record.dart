@@ -100,4 +100,46 @@ class MemorizationRecord {
       notes: notes ?? this.notes,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'studentId': studentId,
+      'circleId': circleId,
+      'date': date.toIso8601String(),
+      'type': type.name,
+      'surahName': surahName,
+      'fromVerse': fromVerse,
+      'toVerse': toVerse,
+      'lessonName': lessonName,
+      'pageNumber': pageNumber,
+      'tajweedRules': tajweedRules,
+      'grade': grade.name,
+      'notes': notes,
+    };
+  }
+
+  factory MemorizationRecord.fromJson(Map<String, dynamic> json) {
+    return MemorizationRecord(
+      id: json['id'] as String,
+      studentId: json['studentId'] as String,
+      circleId: json['circleId'] as String,
+      date: DateTime.parse(json['date'] as String),
+      type: RecordType.values.firstWhere(
+        (e) => e.name == json['type'],
+        orElse: () => RecordType.memorization,
+      ),
+      surahName: json['surahName'] as String?,
+      fromVerse: json['fromVerse'] as int?,
+      toVerse: json['toVerse'] as int?,
+      lessonName: json['lessonName'] as String?,
+      pageNumber: json['pageNumber'] as int?,
+      tajweedRules: json['tajweedRules'] as String?,
+      grade: EvaluationGrade.values.firstWhere(
+        (e) => e.name == json['grade'],
+        orElse: () => EvaluationGrade.acceptable,
+      ),
+      notes: json['notes'] as String?,
+    );
+  }
 }

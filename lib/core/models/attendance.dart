@@ -61,4 +61,31 @@ class Attendance {
       note: note ?? this.note,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'studentId': studentId,
+      'circleId': circleId,
+      'date': date.toIso8601String(),
+      'status': status.name,
+      'arrivalTime': arrivalTime?.toIso8601String(),
+      'note': note,
+    };
+  }
+
+  factory Attendance.fromJson(Map<String, dynamic> json) {
+    return Attendance(
+      id: json['id'] as String,
+      studentId: json['studentId'] as String,
+      circleId: json['circleId'] as String,
+      date: DateTime.parse(json['date'] as String),
+      status: AttendanceStatus.values.firstWhere(
+        (e) => e.name == json['status'],
+        orElse: () => AttendanceStatus.unmarked,
+      ),
+      arrivalTime: json['arrivalTime'] != null ? DateTime.parse(json['arrivalTime'] as String) : null,
+      note: json['note'] as String?,
+    );
+  }
 }

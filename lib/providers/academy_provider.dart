@@ -6,7 +6,6 @@ import '../core/models/attendance.dart';
 import '../core/models/memorization_record.dart';
 import '../core/models/juz_test.dart';
 import '../data/repositories/mock_repository.dart';
-import '../core/utils/datetime_extensions.dart';
 
 class AcademyProvider extends ChangeNotifier {
   final MockRepository _repository = MockRepository();
@@ -230,20 +229,14 @@ class AcademyProvider extends ChangeNotifier {
     final tests = _repository.getTestsForStudent(studentId)
         .where((t) => t.date.year == year && t.date.month == month).toList();
 
-    int memPages = 0;
-    int revPages = 0;
-    
     // حساب تقريبي للإنجاز (هنا يمكن تحسين المنطق حسب كيفية تخزين البيانات)
     for (var r in records) {
       if (r.type == RecordType.memorization) {
         if (r.toVerse != null && r.fromVerse != null) {
           // تبسيط: نعتبر كل 15 آية صفحة تقريباً أو حسب الحاجة
-          memPages += 1; 
         } else if (r.pageNumber != null) {
-          memPages += 1;
         }
       } else if (r.type == RecordType.revision) {
-        revPages += 1;
       }
     }
 

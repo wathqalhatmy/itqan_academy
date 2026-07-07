@@ -46,4 +46,35 @@ class JuzTest {
       notes: notes ?? this.notes,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'studentId': studentId,
+      'circleId': circleId,
+      'date': date.toIso8601String(),
+      'juzNumber': juzNumber,
+      'score': score,
+      'grade': grade.name,
+      'testerName': testerName,
+      'notes': notes,
+    };
+  }
+
+  factory JuzTest.fromJson(Map<String, dynamic> json) {
+    return JuzTest(
+      id: json['id'] as String,
+      studentId: json['studentId'] as String,
+      circleId: json['circleId'] as String,
+      date: DateTime.parse(json['date'] as String),
+      juzNumber: json['juzNumber'] as int,
+      score: (json['score'] as num).toDouble(),
+      grade: EvaluationGrade.values.firstWhere(
+        (e) => e.name == json['grade'],
+        orElse: () => EvaluationGrade.acceptable,
+      ),
+      testerName: json['testerName'] as String,
+      notes: json['notes'] as String?,
+    );
+  }
 }

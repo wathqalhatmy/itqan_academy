@@ -14,11 +14,11 @@ extension StudentStatusExt on StudentStatus {
         StudentStatus.graduated  => 'خريج',
       };
 
-  static StudentStatus fromString(String s) => switch (s) {
-        'مستجد'  => StudentStatus.newStudent,
-        'موقوف'  => StudentStatus.suspended,
-        'خريج'   => StudentStatus.graduated,
-        _         => StudentStatus.active,
+  static StudentStatus fromString(String? s) => switch (s) {
+        'newStudent' || 'مستجد'  => StudentStatus.newStudent,
+        'suspended'  || 'موقوف'  => StudentStatus.suspended,
+        'graduated'  || 'خريج'   => StudentStatus.graduated,
+        _                         => StudentStatus.active,
       };
 }
 
@@ -62,6 +62,32 @@ class Student {
       age: age ?? this.age,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       status: status ?? this.status,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'notes': notes,
+      'behaviorRating': behaviorRating,
+      'completedJuz': completedJuz,
+      'age': age,
+      'phoneNumber': phoneNumber,
+      'status': status.name,
+    };
+  }
+
+  factory Student.fromJson(Map<String, dynamic> json) {
+    return Student(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      notes: json['notes'] as String? ?? '',
+      behaviorRating: (json['behaviorRating'] as num?)?.toDouble() ?? 5.0,
+      completedJuz: (json['completedJuz'] as List<dynamic>?)?.map((e) => e as int).toList() ?? const [],
+      age: json['age'] as int?,
+      phoneNumber: json['phoneNumber'] as String?,
+      status: StudentStatusExt.fromString(json['status'] as String?),
     );
   }
 }
