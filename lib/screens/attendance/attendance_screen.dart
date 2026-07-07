@@ -36,14 +36,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     _initializeAttendanceData();
   }
 
-  void _initializeAttendanceData() {
+  Future<void> _initializeAttendanceData() async {
     final provider = Provider.of<AcademyProvider>(context, listen: false);
     final circle = provider.selectedCircle;
     if (circle == null) return;
 
     final students = provider.getStudentsForCircle(circle.id);
     final normalizedSelectedDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final savedAttendances = provider.getAttendanceForDateAndCircle(circle.id, normalizedSelectedDate);
+    final savedAttendances = await provider.getAttendanceForDateAndCircle(circle.id, normalizedSelectedDate);
 
     _tempStatuses.clear();
     _tempArrivalTimes.clear();
@@ -73,6 +73,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         _tempArrivalTimes[s.id] = now;
       }
     }
+    
+    if (mounted) setState(() {});
   }
 
   void _selectDate(BuildContext context) async {

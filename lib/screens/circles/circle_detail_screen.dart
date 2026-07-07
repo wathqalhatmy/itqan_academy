@@ -423,48 +423,61 @@ class _CircleDetailScreenState extends State<CircleDetailScreen> {
             child: Consumer<AcademyProvider>(
               builder: (context, prov, _) {
                 final today = DateTime.now();
-                final attendance = prov
-                    .getAttendanceForDateAndCircle(circle.id, today)
-                    .firstWhere((a) => a.studentId == student.id,
-                        orElse: () => Attendance(
+                return FutureBuilder<List<Attendance>>(
+                  future: prov.getAttendanceForDateAndCircle(circle.id, today),
+                  builder: (context, snapshot) {
+                    final attendance = snapshot.data?.firstWhere(
+                          (a) => a.studentId == student.id,
+                          orElse: () => Attendance(
+                              id: '',
+                              studentId: student.id,
+                              circleId: circle.id,
+                              date: today,
+                              status: AttendanceStatus.unmarked),
+                        ) ??
+                        Attendance(
                             id: '',
                             studentId: student.id,
                             circleId: circle.id,
                             date: today,
-                            status: AttendanceStatus.unmarked));
+                            status: AttendanceStatus.unmarked);
 
-                if (attendance.id.isEmpty) return const SizedBox.shrink();
+                    if (attendance.id.isEmpty || attendance.status == AttendanceStatus.unmarked) {
+                      return const SizedBox.shrink();
+                    }
 
-                final (Color statusColor, IconData statusIcon) =
-                    switch (attendance.status) {
-                  AttendanceStatus.present => (
-                      AppTheme.successGreen,
-                      Icons.check_circle_rounded
-                    ),
-                  AttendanceStatus.late => (
-                      AppTheme.warningOrange,
-                      Icons.access_time_filled_rounded
-                    ),
-                  AttendanceStatus.absent => (
-                      AppTheme.errorRed,
-                      Icons.cancel_rounded
-                    ),
-                  AttendanceStatus.excused => (
-                      AppTheme.infoBlue,
-                      Icons.info_rounded
-                    ),
-                  AttendanceStatus.unmarked => (
-                      Colors.grey,
-                      Icons.radio_button_unchecked_rounded
-                    ),
-                };
+                    final (Color statusColor, IconData statusIcon) =
+                        switch (attendance.status) {
+                      AttendanceStatus.present => (
+                          AppTheme.successGreen,
+                          Icons.check_circle_rounded
+                        ),
+                      AttendanceStatus.late => (
+                          AppTheme.warningOrange,
+                          Icons.access_time_filled_rounded
+                        ),
+                      AttendanceStatus.absent => (
+                          AppTheme.errorRed,
+                          Icons.cancel_rounded
+                        ),
+                      AttendanceStatus.excused => (
+                          AppTheme.infoBlue,
+                          Icons.info_rounded
+                        ),
+                      AttendanceStatus.unmarked => (
+                          Colors.grey,
+                          Icons.radio_button_unchecked_rounded
+                        ),
+                    };
 
-                return Container(
-                  padding: const EdgeInsets.all(1),
-                  decoration: BoxDecoration(
-                      color: theme.scaffoldBackgroundColor,
-                      shape: BoxShape.circle),
-                  child: Icon(statusIcon, size: 14, color: statusColor),
+                    return Container(
+                      padding: const EdgeInsets.all(1),
+                      decoration: BoxDecoration(
+                          color: theme.scaffoldBackgroundColor,
+                          shape: BoxShape.circle),
+                      child: Icon(statusIcon, size: 14, color: statusColor),
+                    );
+                  },
                 );
               },
             ),
