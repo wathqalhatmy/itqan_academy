@@ -5,24 +5,29 @@ import '../core/models/circle.dart';
 import '../core/models/attendance.dart';
 import '../core/models/memorization_record.dart';
 import '../core/models/juz_test.dart';
+import '../data/repositories/academy_repository.dart';
 import '../data/repositories/mock_repository.dart';
 
 class AcademyProvider extends ChangeNotifier {
-  final MockRepository _repository = MockRepository();
+  final AcademyRepository _repository = MockRepository();
 
   List<Circle> _circles = [];
   List<Student> _students = [];
   Circle? _selectedCircle;
+  
+  // بيانات مساعدة (Caches) لتجنب الـ Future في الواجهات
+  final Map<String, List<Student>> _circleStudentsCache = {};
+  final Map<String, List<MemorizationRecord>> _studentRecordsCache = {};
+  final Map<String, List<JuzTest>> _studentTestsCache = {};
+  final Map<String, List<Attendance>> _studentAttendanceCache = {};
 
   List<Circle> get circles => _circles;
   List<Student> get students => _students;
   Circle? get selectedCircle => _selectedCircle;
 
-  /// إجمالي الطلاب المسجّلين فعلياً في الحلقات (لا يشمل المحذوفين أو غير الموزّعين)
   int get totalEnrolledStudents =>
       _circles.expand((c) => c.studentIds).toSet().length;
 
-  /// قائمة الطلاب غير الموزعين في أي حلقة
   List<Student> get unassignedStudents {
     final assignedIds = _circles.expand((c) => c.studentIds).toSet();
     return _students.where((s) => !assignedIds.contains(s.id)).toList();
@@ -32,15 +37,31 @@ class AcademyProvider extends ChangeNotifier {
     refreshData();
   }
 
-  /// تحميل شامل لكل البيانات من المستودع.
-  /// استخدمه فقط عند العمليات التي تؤثر على علاقات متعددة (حذف حلقة، إضافة طالب ...).
-  void refreshData() {
-    _circles = _repository.getCircles();
-    _students = _repository.getStudents();
+  Future<void> refreshData() async {
+    _circles = await _repository.getCircles();
+    _students = await _repository.getStudents();
     if (_selectedCircle != null) {
-      // تحديث الحلقة المحددة لتشمل التغييرات الجديدة
-      _selectedCircle = _repository.getCircleById(_selectedCircle!.id);
+      _selectedCircle = await _repository.getCircleById(_selectedCircle!.id);
     }
+    
+    // تحديث الكاش الأساسي للطلاب لكل حلقة
+    for (var circle in _circles) {
+      _circleStudentsCache[circle.id] = await _repository.getStudentsForCircle(circle.id);
+    }
+    
+    notifyListeners();
+  }
+
+  // دوال وصول سريعة للبيانات من الكاش
+  List<Student> getStudentsForCircle(String circleId) => _circleStudentsCache[circleId] ?? [];
+  List<MemorizationRecord> getStudentRecords(String studentId) => _studentRecordsCache[studentId] ?? [];
+  List<JuzTest> getStudentTests(String studentId) => _studentTestsCache[studentId] ?? [];
+  List<Attendance> getAttendanceForStudent(String studentId) => _studentAttendanceCache[studentId] ?? [];
+
+  Future<void> loadStudentDetails(String studentId) async {
+    _studentRecordsCache[studentId] = await _repository.getRecordsForStudent(studentId);
+    _studentTestsCache[studentId] = await _repository.getTestsForStudent(studentId);
+    _studentAttendanceCache[studentId] = await _repository.getAttendanceForStudent(studentId);
     notifyListeners();
   }
 
@@ -50,7 +71,7 @@ class AcademyProvider extends ChangeNotifier {
   }
 
   // --- إدارة الحلقات ---
-  void addCircle(String name, String teacherName, CircleLevel level) {
+  Future<void> addCircle(String name, String teacherName, CircleLevel level) async {
     final newCircle = Circle(
       id: 'c_${DateTime.now().millisecondsSinceEpoch}',
       name: name,
@@ -58,20 +79,19 @@ class AcademyProvider extends ChangeNotifier {
       studentIds: [],
       level: level,
     );
-    _repository.addCircle(newCircle);
-    // تؤثر على قائمة الحلقات وإحصائيات الداشبورد — تحميل شامل
-    refreshData();
+    await _repository.addCircle(newCircle);
+    await refreshData();
   }
 
   // --- إدارة الطلاب ---
-  void addStudentToCircle({
+  Future<void> addStudentToCircle({
     required String circleId,
     required String name,
     required int age,
     required String phoneNumber,
     required StudentStatus status,
     String notes = '',
-  }) {
+  }) async {
     final studentId = 's_${DateTime.now().millisecondsSinceEpoch}';
     final newStudent = Student(
       id: studentId,
@@ -84,62 +104,48 @@ class AcademyProvider extends ChangeNotifier {
       completedJuz: [],
     );
 
-    _repository.addStudent(newStudent);
+    await _repository.addStudent(newStudent);
 
-    final circle = _repository.getCircleById(circleId);
+    final circle = await _repository.getCircleById(circleId);
     if (circle != null) {
       final updatedIds = List<String>.from(circle.studentIds)..add(studentId);
-      _repository.updateCircle(circle.copyWith(studentIds: updatedIds));
+      await _repository.updateCircle(circle.copyWith(studentIds: updatedIds));
     }
-    refreshData();
+    await refreshData();
   }
 
-  /// تنسيب/إعادة تنسيب طالب لحلقة معينة
-  void assignStudentToCircle(String studentId, String circleId) {
-    // 1. إزالة الطالب من أي حلقة أخرى أولاً (لضمان عدم التكرار)
+  Future<void> assignStudentToCircle(String studentId, String circleId) async {
     for (var circle in _circles) {
       if (circle.studentIds.contains(studentId)) {
         final updatedIds = List<String>.from(circle.studentIds)..remove(studentId);
-        _repository.updateCircle(circle.copyWith(studentIds: updatedIds));
+        await _repository.updateCircle(circle.copyWith(studentIds: updatedIds));
       }
     }
 
-    // 2. إضافته للحلقة المستهدفة
-    final targetCircle = _repository.getCircleById(circleId);
+    final targetCircle = await _repository.getCircleById(circleId);
     if (targetCircle != null) {
       final updatedIds = List<String>.from(targetCircle.studentIds)..add(studentId);
-      _repository.updateCircle(targetCircle.copyWith(studentIds: updatedIds));
+      await _repository.updateCircle(targetCircle.copyWith(studentIds: updatedIds));
     }
 
-    // 3. تحديث شامل للبيانات
-    refreshData();
+    await refreshData();
   }
 
-  void updateStudentNotesAndBehavior(String studentId, String notes, double behaviorRating) {
-    final student = _repository.getStudentById(studentId);
+  Future<void> updateStudentNotesAndBehavior(String studentId, String notes, double behaviorRating) async {
+    final student = await _repository.getStudentById(studentId);
     if (student != null) {
-      _repository.updateStudent(student.copyWith(notes: notes, behaviorRating: behaviorRating));
-      // تحديث محلي: نحدّث فقط الطالب المتأثر في القائمة المحلية دون إعادة تحميل كامل
-      final idx = _students.indexWhere((s) => s.id == studentId);
-      if (idx != -1) {
-        _students[idx] = student.copyWith(notes: notes, behaviorRating: behaviorRating);
-      }
-      notifyListeners();
+      await _repository.updateStudent(student.copyWith(notes: notes, behaviorRating: behaviorRating));
+      await refreshData();
+      await loadStudentDetails(studentId);
     }
-  }
-
-  List<Student> getStudentsForCircle(String circleId) {
-    return _repository.getStudentsForCircle(circleId);
   }
 
   // --- إدارة الحضور والغياب ---
-  List<Attendance> getAttendanceForDateAndCircle(String circleId, DateTime date) {
+  Future<List<Attendance>> getAttendanceForDateAndCircle(String circleId, DateTime date) async {
     final normalizedDate = DateTime(date.year, date.month, date.day);
-    final savedList = _repository.getAttendanceForDateAndCircle(circleId, normalizedDate);
+    final savedList = await _repository.getAttendanceForDateAndCircle(circleId, normalizedDate);
     final circleStudents = getStudentsForCircle(circleId);
 
-    // نتحقق من وجود سجل حضور لكل طالب حالي في الحلقة.
-    // إذا لم يكن له سجل محفوظ (كطالب جديد مضاف لاحقاً)، ننشئ له سجلاً افتراضياً غير محضر.
     return circleStudents.map((student) {
       final existingIndex = savedList.indexWhere((a) => a.studentId == student.id);
       if (existingIndex != -1) {
@@ -157,28 +163,29 @@ class AcademyProvider extends ChangeNotifier {
     }).toList();
   }
 
-  void saveCircleAttendance(List<Attendance> attendances) {
-    _repository.saveAttendance(attendances);
-    // الحضور لا يؤثر على هيكل الحلقات — notifyListeners كافٍ
+  Future<void> saveCircleAttendance(List<Attendance> attendances) async {
+    await _repository.saveAttendance(attendances);
+    // تحديث الكاش للطلاب المتأثرين
+    for (var a in attendances) {
+       _studentAttendanceCache[a.studentId] = await _repository.getAttendanceForStudent(a.studentId);
+    }
     notifyListeners();
   }
 
-  // --- إحصائيات التقارير الشهرية ---
-
-  /// الحصول على إحصائيات الحضور لجميع طلاب حلقة في شهر معين
   Map<String, Map<AttendanceStatus, int>> getMonthlyAttendanceStats(String circleId, int year, int month) {
     final students = getStudentsForCircle(circleId);
     final Map<String, Map<AttendanceStatus, int>> stats = {};
 
     for (var student in students) {
-      final studentAttendance = _repository.getAttendanceForStudent(student.id)
-          .where((a) => a.circleId == circleId && a.date.year == year && a.date.month == month);
+      final attendanceList = getAttendanceForStudent(student.id);
+      final studentAttendance = attendanceList.where((a) => a.circleId == circleId && a.date.year == year && a.date.month == month);
       
       final Map<AttendanceStatus, int> studentStats = {
         AttendanceStatus.present: 0,
         AttendanceStatus.late: 0,
         AttendanceStatus.absent: 0,
         AttendanceStatus.excused: 0,
+        AttendanceStatus.unmarked: 0,
       };
 
       for (var a in studentAttendance) {
@@ -190,9 +197,8 @@ class AcademyProvider extends ChangeNotifier {
     return stats;
   }
 
-  /// الحصول على نسبة الحضور والالتزام لطالب في حلقة معينة
   double getStudentAttendanceRate(String studentId, String circleId) {
-    final attendanceList = _repository.getAttendanceForStudent(studentId);
+    final attendanceList = getAttendanceForStudent(studentId);
     final circleAttendance = attendanceList.where((a) => a.circleId == circleId).toList();
     
     if (circleAttendance.isEmpty) return 0.0;
@@ -203,8 +209,7 @@ class AcademyProvider extends ChangeNotifier {
     return ((presentCount + lateCount) / circleAttendance.length) * 100;
   }
 
-  /// تحضير جميع طلاب الحلقة كـ "حضور" لتاريخ معين (تحضير سريع)
-  void markAllAsPresent(String circleId, DateTime date) {
+  Future<void> markAllAsPresent(String circleId, DateTime date) async {
     final students = getStudentsForCircle(circleId);
     final normalizedDate = DateTime(date.year, date.month, date.day);
     
@@ -217,28 +222,19 @@ class AcademyProvider extends ChangeNotifier {
       arrivalTime: DateTime(normalizedDate.year, normalizedDate.month, normalizedDate.day, 16, 0),
     )).toList();
 
-    _repository.saveAttendance(attendanceList);
+    await _repository.saveAttendance(attendanceList);
+    for (var s in students) {
+       _studentAttendanceCache[s.id] = await _repository.getAttendanceForStudent(s.id);
+    }
     notifyListeners();
   }
 
-  /// الحصول على ملخص إنجازات الطالب خلال شهر معين
   Map<String, dynamic> getStudentMonthlyPerformance(String studentId, int year, int month) {
-    final records = _repository.getRecordsForStudent(studentId)
-        .where((r) => r.date.year == year && r.date.month == month).toList();
+    final recordList = getStudentRecords(studentId);
+    final records = recordList.where((r) => r.date.year == year && r.date.month == month).toList();
     
-    final tests = _repository.getTestsForStudent(studentId)
-        .where((t) => t.date.year == year && t.date.month == month).toList();
-
-    // حساب تقريبي للإنجاز (هنا يمكن تحسين المنطق حسب كيفية تخزين البيانات)
-    for (var r in records) {
-      if (r.type == RecordType.memorization) {
-        if (r.toVerse != null && r.fromVerse != null) {
-          // تبسيط: نعتبر كل 15 آية صفحة تقريباً أو حسب الحاجة
-        } else if (r.pageNumber != null) {
-        }
-      } else if (r.type == RecordType.revision) {
-      }
-    }
+    final testList = getStudentTests(studentId);
+    final tests = testList.where((t) => t.date.year == year && t.date.month == month).toList();
 
     double avgGrade = 0.0;
     if (records.isNotEmpty) {
@@ -263,11 +259,7 @@ class AcademyProvider extends ChangeNotifier {
   }
 
   // --- إدارة الحفظ والمراجعة والاختبارات ---
-  List<MemorizationRecord> getStudentRecords(String studentId) {
-    return _repository.getRecordsForStudent(studentId);
-  }
-
-  void addStudentRecord({
+  Future<void> addStudentRecord({
     required String studentId,
     required String circleId,
     required RecordType type,
@@ -279,7 +271,7 @@ class AcademyProvider extends ChangeNotifier {
     String? tajweedRules,
     required EvaluationGrade grade,
     String? notes,
-  }) {
+  }) async {
     if (circleId.isEmpty) return;
 
     final record = MemorizationRecord(
@@ -297,15 +289,12 @@ class AcademyProvider extends ChangeNotifier {
       grade: grade,
       notes: notes,
     );
-    _repository.addMemorizationRecord(record);
+    await _repository.addMemorizationRecord(record);
+    _studentRecordsCache[studentId] = await _repository.getRecordsForStudent(studentId);
     notifyListeners();
   }
 
-  List<JuzTest> getStudentTests(String studentId) {
-    return _repository.getTestsForStudent(studentId);
-  }
-
-  void addStudentJuzTest({
+  Future<void> addStudentJuzTest({
     required String studentId,
     required String circleId,
     required int juzNumber,
@@ -313,7 +302,7 @@ class AcademyProvider extends ChangeNotifier {
     required EvaluationGrade grade,
     required String testerName,
     String? notes,
-  }) {
+  }) async {
     if (circleId.isEmpty) return;
 
     final test = JuzTest(
@@ -327,47 +316,37 @@ class AcademyProvider extends ChangeNotifier {
       testerName: testerName,
       notes: notes,
     );
-    _repository.addJuzTest(test);
-    refreshData();
+    await _repository.addJuzTest(test);
+    _studentTestsCache[studentId] = await _repository.getTestsForStudent(studentId);
+    await refreshData();
   }
 
-  // --- دوال إضافية للحذف والتعديل وإحصائيات حضور الطالب ---
-
-  List<Attendance> getAttendanceForStudent(String studentId) {
-    return _repository.getAttendanceForStudent(studentId);
-  }
-
-  void deleteCircle(String circleId) {
-    _repository.deleteCircle(circleId);
+  Future<void> deleteCircle(String circleId) async {
+    await _repository.deleteCircle(circleId);
     if (_selectedCircle?.id == circleId) {
       _selectedCircle = null;
     }
-    // تؤثر على هيكل البيانات كاملاً — تحميل شامل
-    refreshData();
+    await refreshData();
   }
 
-  void removeStudentFromCircle(String circleId, String studentId) {
-    _repository.removeStudentFromCircle(circleId, studentId);
-    // تؤثر على علاقة الطالب بالحلقة — تحميل شامل
-    refreshData();
+  Future<void> removeStudentFromCircle(String circleId, String studentId) async {
+    await _repository.removeStudentFromCircle(circleId, studentId);
+    await refreshData();
   }
 
-  void deleteStudentPermanently(String studentId) {
-    _repository.deleteStudentPermanently(studentId);
-    // تؤثر على جميع البيانات المرتبطة بالطالب — تحميل شامل
-    refreshData();
+  Future<void> deleteStudentPermanently(String studentId) async {
+    await _repository.deleteStudentPermanently(studentId);
+    await refreshData();
   }
 
-  void updateCircle(String circleId, String name, String teacherName, CircleLevel level) {
-    final circle = _repository.getCircleById(circleId);
+  Future<void> updateCircle(String circleId, String name, String teacherName, CircleLevel level) async {
+    final circle = await _repository.getCircleById(circleId);
     if (circle != null) {
-      _repository.updateCircle(circle.copyWith(name: name, teacherName: teacherName, level: level));
-      // تؤثر على بيانات الحلقة في جميع الشاشات — تحميل شامل
-      refreshData();
+      await _repository.updateCircle(circle.copyWith(name: name, teacherName: teacherName, level: level));
+      await refreshData();
     }
   }
 
-  /// تحديد التقدير تلقائياً بناءً على الدرجة (يستخدم الثوابت المركزية)
   static EvaluationGrade gradeFromScore(double score) {
     if (score >= AppConstants.excellentThreshold) return EvaluationGrade.excellent;
     if (score >= AppConstants.veryGoodThreshold)  return EvaluationGrade.veryGood;

@@ -4,9 +4,9 @@ import '../../core/models/attendance.dart';
 import '../../core/models/memorization_record.dart';
 import '../../core/models/juz_test.dart';
 import '../../core/constants/app_constants.dart';
-import '../../core/utils/datetime_extensions.dart';
+import 'academy_repository.dart';
 
-class MockRepository {
+class MockRepository implements AcademyRepository {
   // بيانات الطلاب في الذاكرة
   final List<Student> _students = [
     Student(id: 's1', name: 'أنس بن مالك', notes: 'ممتاز في التجويد ومخارج الحروف', behaviorRating: 5.0, completedJuz: [30, 29]),
@@ -112,21 +112,23 @@ class MockRepository {
     // ملء بيانات حضور افتراضية لليوم السابق للتوضيح
     final yesterday = DateTime.now().subtract(const Duration(days: 1));
     _attendanceRecords.addAll([
-      Attendance(id: 'a1', studentId: 's1', circleId: 'c1', date: yesterday, status: AttendanceStatus.present, arrivalTime: yesterday.copyWith(hour: 16, minute: 0)),
-      Attendance(id: 'a2', studentId: 's2', circleId: 'c1', date: yesterday, status: AttendanceStatus.late, arrivalTime: yesterday.copyWith(hour: 16, minute: 25)),
-      Attendance(id: 'a3', studentId: 's3', circleId: 'c1', date: yesterday, status: AttendanceStatus.present, arrivalTime: yesterday.copyWith(hour: 15, minute: 55)),
-      Attendance(id: 'a4', studentId: 's4', circleId: 'c2', date: yesterday, status: AttendanceStatus.present, arrivalTime: yesterday.copyWith(hour: 16, minute: 5)),
+      Attendance(id: 'a1', studentId: 's1', circleId: 'c1', date: yesterday, status: AttendanceStatus.present, arrivalTime: DateTime(yesterday.year, yesterday.month, yesterday.day, 16, 0)),
+      Attendance(id: 'a2', studentId: 's2', circleId: 'c1', date: yesterday, status: AttendanceStatus.late, arrivalTime: DateTime(yesterday.year, yesterday.month, yesterday.day, 16, 25)),
+      Attendance(id: 'a3', studentId: 's3', circleId: 'c1', date: yesterday, status: AttendanceStatus.present, arrivalTime: DateTime(yesterday.year, yesterday.month, yesterday.day, 15, 55)),
+      Attendance(id: 'a4', studentId: 's4', circleId: 'c2', date: yesterday, status: AttendanceStatus.present, arrivalTime: DateTime(yesterday.year, yesterday.month, yesterday.day, 16, 5)),
       Attendance(id: 'a5', studentId: 's5', circleId: 'c2', date: yesterday, status: AttendanceStatus.absent),
       Attendance(id: 'a6', studentId: 's6', circleId: 'c2', date: yesterday, status: AttendanceStatus.excused),
-      Attendance(id: 'a7', studentId: 's7', circleId: 'c3', date: yesterday, status: AttendanceStatus.present, arrivalTime: yesterday.copyWith(hour: 16, minute: 10)),
-      Attendance(id: 'a8', studentId: 's8', circleId: 'c3', date: yesterday, status: AttendanceStatus.present, arrivalTime: yesterday.copyWith(hour: 15, minute: 50)),
+      Attendance(id: 'a7', studentId: 's7', circleId: 'c3', date: yesterday, status: AttendanceStatus.present, arrivalTime: DateTime(yesterday.year, yesterday.month, yesterday.day, 16, 10)),
+      Attendance(id: 'a8', studentId: 's8', circleId: 'c3', date: yesterday, status: AttendanceStatus.present, arrivalTime: DateTime(yesterday.year, yesterday.month, yesterday.day, 15, 50)),
     ]);
   }
 
   // --- دوال إدارة الحلقات ---
-  List<Circle> getCircles() => List.unmodifiable(_circles);
+  @override
+  Future<List<Circle>> getCircles() async => List.unmodifiable(_circles);
 
-  Circle? getCircleById(String id) {
+  @override
+  Future<Circle?> getCircleById(String id) async {
     try {
       return _circles.firstWhere((c) => c.id == id);
     } catch (_) {
@@ -134,27 +136,40 @@ class MockRepository {
     }
   }
 
-  void addCircle(Circle circle) {
+  @override
+  Future<void> addCircle(Circle circle) async {
     _circles.add(circle);
   }
 
-  void updateCircle(Circle circle) {
+  @override
+  Future<void> updateCircle(Circle circle) async {
     final idx = _circles.indexWhere((c) => c.id == circle.id);
     if (idx != -1) {
       _circles[idx] = circle;
     }
   }
 
-  // --- دوال إدارة الطلاب ---
-  List<Student> getStudents() => List.unmodifiable(_students);
+  @override
+  Future<void> deleteCircle(String circleId) async {
+    _circles.removeWhere((c) => c.id == circleId);
+    _attendanceRecords.removeWhere((a) => a.circleId == circleId);
+    _memorizationRecords.removeWhere((r) => r.circleId == circleId);
+    _juzTests.removeWhere((t) => t.circleId == circleId);
+  }
 
-  List<Student> getStudentsForCircle(String circleId) {
-    final circle = getCircleById(circleId);
+  // --- دوال إدارة الطلاب ---
+  @override
+  Future<List<Student>> getStudents() async => List.unmodifiable(_students);
+
+  @override
+  Future<List<Student>> getStudentsForCircle(String circleId) async {
+    final circle = await getCircleById(circleId);
     if (circle == null) return [];
     return _students.where((s) => circle.studentIds.contains(s.id)).toList();
   }
 
-  Student? getStudentById(String id) {
+  @override
+  Future<Student?> getStudentById(String id) async {
     try {
       return _students.firstWhere((s) => s.id == id);
     } catch (_) {
@@ -162,19 +177,45 @@ class MockRepository {
     }
   }
 
-  void addStudent(Student student) {
+  @override
+  Future<void> addStudent(Student student) async {
     _students.add(student);
   }
 
-  void updateStudent(Student student) {
+  @override
+  Future<void> updateStudent(Student student) async {
     final idx = _students.indexWhere((s) => s.id == student.id);
     if (idx != -1) {
       _students[idx] = student;
     }
   }
 
+  @override
+  Future<void> deleteStudentPermanently(String studentId) async {
+    _students.removeWhere((s) => s.id == studentId);
+    for (var i = 0; i < _circles.length; i++) {
+      if (_circles[i].studentIds.contains(studentId)) {
+        final updatedIds = List<String>.from(_circles[i].studentIds)..remove(studentId);
+        _circles[i] = _circles[i].copyWith(studentIds: updatedIds);
+      }
+    }
+    _attendanceRecords.removeWhere((a) => a.studentId == studentId);
+    _memorizationRecords.removeWhere((r) => r.studentId == studentId);
+    _juzTests.removeWhere((t) => t.studentId == studentId);
+  }
+
+  @override
+  Future<void> removeStudentFromCircle(String circleId, String studentId) async {
+    final circle = await getCircleById(circleId);
+    if (circle != null) {
+      final updatedIds = List<String>.from(circle.studentIds)..remove(studentId);
+      await updateCircle(circle.copyWith(studentIds: updatedIds));
+    }
+  }
+
   // --- دوال إدارة الحضور ---
-  List<Attendance> getAttendanceForDateAndCircle(String circleId, DateTime date) {
+  @override
+  Future<List<Attendance>> getAttendanceForDateAndCircle(String circleId, DateTime date) async {
     return _attendanceRecords.where((a) =>
         a.circleId == circleId &&
         a.date.year == date.year &&
@@ -183,7 +224,13 @@ class MockRepository {
     ).toList();
   }
 
-  void saveAttendance(List<Attendance> attendances) {
+  @override
+  Future<List<Attendance>> getAttendanceForStudent(String studentId) async {
+    return _attendanceRecords.where((a) => a.studentId == studentId).toList();
+  }
+
+  @override
+  Future<void> saveAttendance(List<Attendance> attendances) async {
     for (var a in attendances) {
       // إزالة السجل القديم إن وجد
       _attendanceRecords.removeWhere((item) =>
@@ -198,65 +245,35 @@ class MockRepository {
   }
 
   // --- سجل الحفظ والمراجعة ---
-  List<MemorizationRecord> getRecordsForStudent(String studentId) {
+  @override
+  Future<List<MemorizationRecord>> getRecordsForStudent(String studentId) async {
     return _memorizationRecords.where((r) => r.studentId == studentId).toList()
       ..sort((a, b) => b.date.compareTo(a.date));
   }
 
-  void addMemorizationRecord(MemorizationRecord record) {
+  @override
+  Future<void> addMemorizationRecord(MemorizationRecord record) async {
     _memorizationRecords.add(record);
   }
 
   // --- سجل اختبارات الأجزاء ---
-  List<JuzTest> getTestsForStudent(String studentId) {
+  @override
+  Future<List<JuzTest>> getTestsForStudent(String studentId) async {
     return _juzTests.where((t) => t.studentId == studentId).toList()
       ..sort((a, b) => b.date.compareTo(a.date));
   }
 
-  void addJuzTest(JuzTest test) {
+  @override
+  Future<void> addJuzTest(JuzTest test) async {
     _juzTests.add(test);
     
     // إضافة الجزء لقائمة الأجزاء المجتازة للطالب تلقائياً إذا اجتاز الاختبار
     if (test.score >= AppConstants.juzPassingScore) {
-      final student = getStudentById(test.studentId);
+      final student = await getStudentById(test.studentId);
       if (student != null && !student.completedJuz.contains(test.juzNumber)) {
         final updatedCompletedJuz = List<int>.from(student.completedJuz)..add(test.juzNumber);
-        updateStudent(student.copyWith(completedJuz: updatedCompletedJuz));
+        await updateStudent(student.copyWith(completedJuz: updatedCompletedJuz));
       }
     }
-  }
-
-  // --- دوال إضافية للحذف والتعديل وإحصائيات الحضور ---
-
-  List<Attendance> getAttendanceForStudent(String studentId) {
-    return _attendanceRecords.where((a) => a.studentId == studentId).toList();
-  }
-
-  void deleteCircle(String circleId) {
-    _circles.removeWhere((c) => c.id == circleId);
-    _attendanceRecords.removeWhere((a) => a.circleId == circleId);
-    _memorizationRecords.removeWhere((r) => r.circleId == circleId);
-    _juzTests.removeWhere((t) => t.circleId == circleId);
-  }
-
-  void removeStudentFromCircle(String circleId, String studentId) {
-    final circle = getCircleById(circleId);
-    if (circle != null) {
-      final updatedIds = List<String>.from(circle.studentIds)..remove(studentId);
-      updateCircle(circle.copyWith(studentIds: updatedIds));
-    }
-  }
-
-  void deleteStudentPermanently(String studentId) {
-    _students.removeWhere((s) => s.id == studentId);
-    for (var i = 0; i < _circles.length; i++) {
-      if (_circles[i].studentIds.contains(studentId)) {
-        final updatedIds = List<String>.from(_circles[i].studentIds)..remove(studentId);
-        _circles[i] = _circles[i].copyWith(studentIds: updatedIds);
-      }
-    }
-    _attendanceRecords.removeWhere((a) => a.studentId == studentId);
-    _memorizationRecords.removeWhere((r) => r.studentId == studentId);
-    _juzTests.removeWhere((t) => t.studentId == studentId);
   }
 }
