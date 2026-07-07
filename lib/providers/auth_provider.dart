@@ -10,8 +10,7 @@ enum AuthStatus {
 
 class AuthProvider extends ChangeNotifier {
   final _storage = const FlutterSecureStorage();
-  // ignore: unused_field
-  final _apiClient = ApiClient(); // يمكن تمريره عبر Constructor للحقن (Injection)
+  final _apiClient = ApiClient();
 
   AuthStatus _status = AuthStatus.unauthenticated;
   String? _userName;
@@ -25,11 +24,9 @@ class AuthProvider extends ChangeNotifier {
     _checkExistingToken();
   }
 
-  /// التحقق من وجود توكن محفوظ عند تشغيل التطبيق (Auto Login)
   Future<void> _checkExistingToken() async {
     _token = await _storage.read(key: 'jwt_token');
     if (_token != null) {
-      // هنا يفضل التحقق من صلاحية التوكن عبر طلب بسيط للباك اند
       _status = AuthStatus.authenticated;
       _userName = await _storage.read(key: 'user_name') ?? 'مستخدم';
       notifyListeners();
@@ -41,9 +38,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // ملاحظة: هذا الكود يفترض وجود Endpoint في جانجو باسم /login/
-      // ويعيد بيانات تحتوي على access token
-      /*
+      // الاتصال الحقيقي بسيرفر جانجو لجلب التوكن
       final response = await _apiClient.post('/login/', data: {
         'username': email,
         'password': password,
@@ -51,30 +46,14 @@ class AuthProvider extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         final token = response.data['access'];
-        final user = response.data['user_display_name'];
+        // في جانجو الافتراضي لا يعيد الاسم، سنفترض أنه admin للتجربة أو نعدل السيرفر لاحقاً
+        const userDisplayName = 'مدير النظام';
         
         await _storage.write(key: 'jwt_token', value: token);
-        await _storage.write(key: 'user_name', value: user);
+        await _storage.write(key: 'user_name', value: userDisplayName);
         
         _token = token;
-        _userName = user;
-        _status = AuthStatus.authenticated;
-        notifyListeners();
-        return true;
-      }
-      */
-
-      // حالياً سنبقي على المحاكاة لضمان عمل التطبيق حتى تجهيز الباك اند
-      await Future.delayed(const Duration(seconds: 1));
-      if (email.isNotEmpty && password.length >= 6) {
-        const mockToken = 'mock_jwt_token_for_itqan';
-        const mockUser = 'مدير الأكاديمية';
-        
-        await _storage.write(key: 'jwt_token', value: mockToken);
-        await _storage.write(key: 'user_name', value: mockUser);
-        
-        _token = mockToken;
-        _userName = mockUser;
+        _userName = userDisplayName;
         _status = AuthStatus.authenticated;
         notifyListeners();
         return true;

@@ -5,8 +5,8 @@ class ApiClient {
   late Dio dio;
   final _storage = const FlutterSecureStorage();
   
-  // يفضل وضع هذا في ملف إعدادات منفصل لاحقاً
-  static const String baseUrl = 'https://your-django-api.com/api/v1';
+  // استخدم 10.0.2.2 بدلاً من 127.0.0.1 للعمل على محاكي أندرويد
+  static const String baseUrl = 'http://10.0.2.2:8000/api/v1';
 
   ApiClient() {
     dio = Dio(

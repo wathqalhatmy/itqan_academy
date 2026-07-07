@@ -6,10 +6,10 @@ import '../core/models/attendance.dart';
 import '../core/models/memorization_record.dart';
 import '../core/models/juz_test.dart';
 import '../data/repositories/academy_repository.dart';
-import '../data/repositories/mock_repository.dart';
+import '../data/repositories/django_repository.dart';
 
 class AcademyProvider extends ChangeNotifier {
-  final AcademyRepository _repository = MockRepository();
+  final AcademyRepository _repository = DjangoRepository();
 
   List<Circle> _circles = [];
   List<Student> _students = [];
