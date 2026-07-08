@@ -1,38 +1,56 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiClient {
   late Dio dio;
   final _storage = const FlutterSecureStorage();
   
-  // استخدم 10.0.2.2 بدلاً من 127.0.0.1 للعمل على محاكي أندرويد
-  static const String baseUrl = 'http://10.0.2.2:8000/api/v1';
+  // تحديد الرابط تلقائياً بناءً على المنصة
+  static String get baseUrl {
+    if (kIsWeb) {
+      return 'http://127.0.0.1:8000/api/v1';
+    } else {
+      // للمحاكي أندرويد
+      return 'http://10.0.2.2:8000/api/v1';
+    }
+  }
 
   ApiClient() {
     dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
         responseType: ResponseType.json,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
       ),
     );
 
-    // إضافة الـ Interceptors لإدارة التوكن والأخطاء بشكل تلقائي
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          // جلب التوكن من التخزين الآمن
           final token = await _storage.read(key: 'jwt_token');
           if (token != null) {
             options.headers['Authorization'] = 'Bearer $token';
           }
+          debugPrint('Sending Request: [${options.method}] ${options.uri}');
           return handler.next(options);
         },
+        onResponse: (response, handler) {
+          debugPrint('Received Response: ${response.statusCode} from ${response.requestOptions.uri}');
+          return handler.next(response);
+        },
         onError: (DioException e, handler) {
+          debugPrint('API Error: [${e.type}] ${e.message}');
+          if (e.response != null) {
+            debugPrint('Error Data: ${e.response?.data}');
+          }
           if (e.response?.statusCode == 401) {
-            // هنا يمكن إضافة منطق تسجيل الخروج التلقائي عند انتهاء صلاحية التوكن
-            print('Unauthorized: Token expired or invalid');
+            debugPrint('Unauthorized: Action required (e.g., logout)');
           }
           return handler.next(e);
         },
@@ -40,7 +58,6 @@ class ApiClient {
     );
   }
 
-  // دوال مساعدة لتسهيل الطلبات
   Future<Response> get(String path, {Map<String, dynamic>? queryParameters}) async {
     return await dio.get(path, queryParameters: queryParameters);
   }

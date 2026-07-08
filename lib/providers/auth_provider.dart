@@ -46,8 +46,9 @@ class AuthProvider extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         final token = response.data['access'];
-        // في جانجو الافتراضي لا يعيد الاسم، سنفترض أنه admin للتجربة أو نعدل السيرفر لاحقاً
-        const userDisplayName = 'مدير النظام';
+        // جلب اسم المستخدم من الـ payload الخاص بالتوكن أو عبر طلب منفصل
+        // للتبسيط حالياً سنستخدم 'مدير الأكاديمية'
+        const userDisplayName = 'مدير الأكاديمية';
         
         await _storage.write(key: 'jwt_token', value: token);
         await _storage.write(key: 'user_name', value: userDisplayName);
