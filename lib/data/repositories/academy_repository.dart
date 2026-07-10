@@ -32,4 +32,8 @@ abstract class AcademyRepository {
   Future<void> addMemorizationRecord(MemorizationRecord record);
   Future<List<JuzTest>> getTestsForStudent(String studentId);
   Future<void> addJuzTest(JuzTest test);
+
+  // تقارير متقدمة (نقل العمليات الحسابية للسيرفر)
+  Future<List<dynamic>> getCircleMonthlyStats(String circleId, int year, int month);
+  Future<Map<String, dynamic>> getStudentMonthlyReportDetails(String studentId, int year, int month);
 }

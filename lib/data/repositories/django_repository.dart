@@ -117,4 +117,22 @@ class DjangoRepository implements AcademyRepository {
   Future<void> addJuzTest(JuzTest test) async {
     await _apiClient.post('/tests/', data: test.toJson());
   }
+
+  @override
+  Future<List<dynamic>> getCircleMonthlyStats(String circleId, int year, int month) async {
+    final response = await _apiClient.get('/circles/$circleId/monthly-stats/', queryParameters: {
+      'year': year,
+      'month': month,
+    });
+    return response.data as List<dynamic>;
+  }
+
+  @override
+  Future<Map<String, dynamic>> getStudentMonthlyReportDetails(String studentId, int year, int month) async {
+    final response = await _apiClient.get('/students/$studentId/report-details/', queryParameters: {
+      'year': year,
+      'month': month,
+    });
+    return response.data as Map<String, dynamic>;
+  }
 }

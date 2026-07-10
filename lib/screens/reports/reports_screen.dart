@@ -19,6 +19,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
   Circle? _selectedCircle;
   int _selectedYear = DateTime.now().year;
   int _selectedMonth = DateTime.now().month;
+  bool _isLoadingPreview = false;
+  List<dynamic>? _circleStatsCache;
 
   final List<int> _years = List.generate(5, (index) => DateTime.now().year - index);
   final List<String> _months = [
@@ -31,6 +33,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
     super.initState();
     final provider = Provider.of<AcademyProvider>(context, listen: false);
     _selectedCircle = provider.selectedCircle ?? (provider.circles.isNotEmpty ? provider.circles.first : null);
+    if (_selectedCircle != null) {
+      _loadPreview();
+    }
+  }
+
+  Future<void> _loadPreview() async {
+    if (_selectedCircle == null) return;
+    setState(() => _isLoadingPreview = true);
+    try {
+      final stats = await Provider.of<AcademyProvider>(context, listen: false)
+          .getCircleMonthlyStats(_selectedCircle!.id, _selectedYear, _selectedMonth);
+      setState(() {
+        _circleStatsCache = stats;
+        _isLoadingPreview = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingPreview = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ في جلب البيانات: $e')));
+      }
+    }
   }
 
   @override
@@ -39,102 +62,120 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    return Container(
-      color: isDark ? AppTheme.backgroundDark : AppTheme.backgroundLight,
-      child: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: Scaffold(
-            appBar: AppBar(
-              title: const Text('التقارير الشهرية'),
-            ),
-            body: Consumer<AcademyProvider>(
-              builder: (context, provider, child) {
-                if (provider.circles.isEmpty) {
-                  return const Center(child: Text('لا توجد حلقات متاحة لإنشاء تقارير'));
-                }
+    return Scaffold(
+      appBar: AppBar(title: const Text('التقارير الذكية')),
+      body: Consumer<AcademyProvider>(
+        builder: (context, provider, child) {
+          if (provider.circles.isEmpty) {
+            return const Center(child: Text('لا توجد حلقات متاحة لإنشاء تقارير'));
+          }
 
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildSelectionSection(provider),
-                      const SizedBox(height: 24),
-                      if (_selectedCircle != null) ...[
-                        Text(
-                          'خيارات التقرير',
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildReportActionCard(
-                          title: 'تقرير الحلقة الشامل',
-                          subtitle: 'يتضمن إحصائيات الحضور والإنجاز لجميع طلاب الحلقة',
-                          icon: Icons.groups_rounded,
-                          color: colorScheme.primary,
-                          onTap: () => _generateCircleMonthlyReport(provider),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'تقارير فردية للطلاب',
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 12),
-                        ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: provider.getStudentsForCircle(_selectedCircle!.id).length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
-                          itemBuilder: (context, index) {
-                            final student = provider.getStudentsForCircle(_selectedCircle!.id)[index];
-                            return ListTile(
-                              tileColor: colorScheme.surface,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              leading: CircleAvatar(
-                                backgroundColor: colorScheme.primary.withValues(alpha: 0.1),
-                                child: Text(student.name.substring(0, 1)),
-                              ),
-                              title: Text(student.name, style: const TextStyle(fontSize: 14)),
-                              trailing: const Icon(Icons.picture_as_pdf_rounded, color: Colors.red, size: 20),
-                              onTap: () async {
-                                // إظهار مؤشر تحميل بسيط
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('جاري جلب بيانات الطالب وتجهيز التقرير...'), duration: Duration(seconds: 1)),
-                                );
-                                await _generateStudentMonthlyReport(provider, student);
-                              },
-                            );
-                          },
-                        ),
-                      ],
-                    ],
-                  ),
-                );
-              },
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _buildSelectionSection(provider),
+              const SizedBox(height: 24),
+              if (_selectedCircle != null) ...[
+                _buildPreviewHeader(theme),
+                if (_isLoadingPreview)
+                  const Center(child: Padding(padding: EdgeInsets.all(32.0), child: CircularProgressIndicator()))
+                else if (_circleStatsCache != null)
+                  _buildStatsTable(theme, provider)
+                else
+                  const Center(child: Text('لا توجد بيانات لهذا الشهر')),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPreviewHeader(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text('معاينة إحصائيات الشهر', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          TextButton.icon(
+            onPressed: () => _generateCircleMonthlyReport(context.read<AcademyProvider>()),
+            icon: const Icon(Icons.picture_as_pdf_rounded, color: Colors.red),
+            label: const Text('تقرير الحلقة الشامل', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsTable(ThemeData theme, AcademyProvider provider) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            ),
+            child: const Row(
+              children: [
+                Expanded(flex: 3, child: Text('اسم الطالب', style: TextStyle(fontWeight: FontWeight.bold))),
+                Expanded(child: Text('حضور', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold))),
+                Expanded(child: Text('إنجاز', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold))),
+                SizedBox(width: 48),
+              ],
             ),
           ),
-        ),
+          ..._circleStatsCache!.map((stat) {
+            final studentId = stat['studentId'];
+            return Column(
+              children: [
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  title: Text(stat['studentName'], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  subtitle: Text('الالتزام: ${stat['attendance']['rate']}%', style: TextStyle(fontSize: 11, color: theme.colorScheme.primary)),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.download_rounded, size: 20),
+                    onPressed: () => _generateStudentMonthlyReport(provider, studentId, stat['studentName']),
+                    tooltip: 'تقرير الطالب',
+                  ),
+                  leading: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.1),
+                    child: Text('${stat['achievement']['memorizationCount']}', style: TextStyle(fontSize: 12, color: theme.colorScheme.secondary, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const Divider(height: 1),
+              ],
+            );
+          }),
+        ],
       ),
     );
   }
 
   Widget _buildSelectionSection(AcademyProvider provider) {
     return Card(
-      elevation: 0,
-      color: Theme.of(context).colorScheme.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             DropdownButtonFormField<Circle>(
               initialValue: _selectedCircle,
-              decoration: const InputDecoration(labelText: 'الحلقة', border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: 'اختر الحلقة', prefixIcon: Icon(Icons.groups_rounded)),
               items: provider.circles.map((c) => DropdownMenuItem(value: c, child: Text(c.name))).toList(),
-              onChanged: (val) => setState(() => _selectedCircle = val),
+              onChanged: (val) {
+                setState(() => _selectedCircle = val);
+                _loadPreview();
+              },
             ),
             const SizedBox(height: 16),
             Row(
@@ -142,21 +183,31 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 Expanded(
                   child: DropdownButtonFormField<int>(
                     initialValue: _selectedYear,
-                    decoration: const InputDecoration(labelText: 'السنة', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(labelText: 'السنة'),
                     items: _years.map((y) => DropdownMenuItem(value: y, child: Text('$y'))).toList(),
-                    onChanged: (val) { if (val != null) setState(() => _selectedYear = val); },
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _selectedYear = val);
+                        _loadPreview();
+                      }
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: DropdownButtonFormField<int>(
                     initialValue: _selectedMonth,
-                    decoration: const InputDecoration(labelText: 'الشهر', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(labelText: 'الشهر'),
                     items: List.generate(12, (index) => DropdownMenuItem(
                       value: index + 1,
                       child: Text(_months[index]),
                     )),
-                    onChanged: (val) { if (val != null) setState(() => _selectedMonth = val); },
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _selectedMonth = val);
+                        _loadPreview();
+                      }
+                    },
                   ),
                 ),
               ],
@@ -167,81 +218,32 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  Widget _buildReportActionCard({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        onTap: onTap,
-        leading: CircleAvatar(
-          backgroundColor: color.withValues(alpha: 0.1),
-          child: Icon(icon, color: color),
-        ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
-      ),
-    );
-  }
-
   Future<void> _generateCircleMonthlyReport(AcademyProvider provider) async {
-    if (_selectedCircle == null) return;
+    if (_selectedCircle == null || _circleStatsCache == null) return;
     
-    // إظهار مؤشر تحميل
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('جاري جلب بيانات طلاب الحلقة...'), duration: Duration(seconds: 1)),
-    );
-
-    final students = provider.getStudentsForCircle(_selectedCircle!.id);
-    
-    // التأكد من تحميل بيانات جميع الطلاب لضمان دقة التقرير
-    for (var s in students) {
-      await provider.loadStudentDetails(s.id);
-    }
-
-    final attendanceStats = provider.getMonthlyAttendanceStats(_selectedCircle!.id, _selectedYear, _selectedMonth);
-
     final rows = StringBuffer();
-    for (var s in students) {
-      final studentStats = attendanceStats[s.id] ?? {
-        AttendanceStatus.present: 0,
-        AttendanceStatus.late: 0,
-        AttendanceStatus.absent: 0,
-        AttendanceStatus.excused: 0,
-      };
-      
-      final performance = provider.getStudentMonthlyPerformance(s.id, _selectedYear, _selectedMonth);
-      final totalDays = studentStats.values.fold(0, (sum, val) => sum + val);
-      final attendanceRate = totalDays == 0 ? 0 : ((studentStats[AttendanceStatus.present]! + studentStats[AttendanceStatus.late]!) / totalDays) * 100;
-
+    for (var stat in _circleStatsCache!) {
       rows.write('''
         <tr>
-          <td>${s.name}</td>
-          <td style="text-align: center;">${studentStats[AttendanceStatus.present]}</td>
-          <td style="text-align: center;">${studentStats[AttendanceStatus.absent]}</td>
-          <td style="text-align: center;">${attendanceRate.toStringAsFixed(0)}%</td>
-          <td style="text-align: center;">${performance['memorizationCount']}</td>
-          <td style="text-align: center;">${performance['revisionCount']}</td>
-          <td style="text-align: center;">${(performance['avgGrade'] as double).toStringAsFixed(1)}</td>
+          <td>${stat['studentName']}</td>
+          <td style="text-align: center;">${stat['attendance']['present']}</td>
+          <td style="text-align: center;">${stat['attendance']['absent']}</td>
+          <td style="text-align: center;">${stat['attendance']['rate']}%</td>
+          <td style="text-align: center;">${stat['achievement']['memorizationCount']}</td>
+          <td style="text-align: center;">${stat['achievement']['revisionCount']}</td>
+          <td style="text-align: center;">${stat['achievement']['avgGrade']}</td>
         </tr>
       ''');
     }
 
     final html = _buildBaseHtmlReport(
-      title: 'تقرير حلقة: ${_selectedCircle!.name}',
-      subtitle: 'الملخص الشهري: ${_months[_selectedMonth-1]} $_selectedYear',
+      title: 'تقرير إحصائيات الحلقة',
+      subtitle: 'حلقة: ${_selectedCircle!.name} - ${_months[_selectedMonth-1]} $_selectedYear',
       content: '''
         <div class="meta-grid">
           <div class="meta-card"><h3>المعلم</h3><p>${_selectedCircle!.teacherName}</p></div>
           <div class="meta-card"><h3>المستوى</h3><p>${_selectedCircle!.level.nameAr}</p></div>
-          <div class="meta-card"><h3>عدد الطلاب</h3><p>${students.length}</p></div>
+          <div class="meta-card"><h3>إجمالي الطلاب</h3><p>${_circleStatsCache!.length}</p></div>
         </div>
         <table>
           <thead>
@@ -265,43 +267,40 @@ class _ReportsScreenState extends State<ReportsScreen> {
     FileExporter.printHtmlReport(html, 'تقرير_حلقة_${_selectedCircle!.name}_$_selectedMonth');
   }
 
-  Future<void> _generateStudentMonthlyReport(AcademyProvider provider, Student student) async {
-    await provider.loadStudentDetails(student.id);
-    final performance = provider.getStudentMonthlyPerformance(student.id, _selectedYear, _selectedMonth);
-    final attendanceStats = provider.getMonthlyAttendanceStats(_selectedCircle!.id, _selectedYear, _selectedMonth)[student.id] ?? {
-      AttendanceStatus.present: 0,
-      AttendanceStatus.late: 0,
-      AttendanceStatus.absent: 0,
-      AttendanceStatus.excused: 0,
-    };
+  Future<void> _generateStudentMonthlyReport(AcademyProvider provider, String studentId, String studentName) async {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('جاري إنشاء التقرير المفصل...'), duration: Duration(seconds: 1)));
+    
+    final reportData = await provider.getStudentMonthlyReportDetails(studentId, _selectedYear, _selectedMonth);
+    final summary = reportData['summary'];
+    final logs = reportData['dailyLogs'] as List<dynamic>;
 
-    final totalDays = attendanceStats.values.fold(0, (sum, val) => sum + val);
-    final attendanceRate = totalDays == 0 ? 0 : ((attendanceStats[AttendanceStatus.present]! + attendanceStats[AttendanceStatus.late]!) / totalDays) * 100;
-
-    final records = performance['records'] as List<MemorizationRecord>;
     final recordRows = StringBuffer();
-    for (var r in records) {
+    for (var r in logs) {
+      final RecordType type = RecordType.values.firstWhere((e) => e.name == r['type'], orElse: () => RecordType.memorization);
+      final EvaluationGrade grade = EvaluationGrade.values.firstWhere((e) => e.name == r['grade'], orElse: () => EvaluationGrade.acceptable);
+      final date = DateTime.parse(r['date']);
+
       recordRows.write('''
         <tr>
-          <td>${r.date.day}/${r.date.month}</td>
-          <td>${r.type.nameAr}</td>
-          <td>${r.surahName ?? r.lessonName ?? '-'}</td>
-          <td style="text-align: center;">${r.grade.nameAr}</td>
+          <td>${date.day}/${date.month}</td>
+          <td>${type.nameAr}</td>
+          <td>${r['surahName'] ?? r['lessonName'] ?? '-'}</td>
+          <td style="text-align: center;">${grade.nameAr}</td>
         </tr>
       ''');
     }
 
     final html = _buildBaseHtmlReport(
-      title: 'تقرير الطالب: ${student.name}',
-      subtitle: 'تقرير شهر: ${_months[_selectedMonth-1]} $_selectedYear',
+      title: 'تقرير أداء الطالب الشهري',
+      subtitle: 'الطالب: $studentName - ${_months[_selectedMonth-1]} $_selectedYear',
       content: '''
         <div class="meta-grid">
-          <div class="meta-card"><h3>الحلقة</h3><p>${_selectedCircle!.name}</p></div>
-          <div class="meta-card"><h3>نسبة الحضور</h3><p>${attendanceRate.toStringAsFixed(0)}%</p></div>
-          <div class="meta-card"><h3>إنجازات الشهر</h3><p>${records.length} سجل</p></div>
+          <div class="meta-card"><h3>نسبة الحضور</h3><p>${summary['attendanceRate']}%</p></div>
+          <div class="meta-card"><h3>تقييم السلوك</h3><p>${reportData['behaviorRating']}/5</p></div>
+          <div class="meta-card"><h3>عدد السجلات</h3><p>${logs.length}</p></div>
         </div>
         
-        <h3>تفاصيل السجلات اليومية</h3>
+        <h3 style="color:#053e2a; margin-top:30px; border-right:4px solid #c5a880; padding-right:10px;">تفاصيل السجل اليومي</h3>
         <table>
           <thead>
             <tr>
@@ -315,10 +314,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ${recordRows.isEmpty ? '<tr><td colspan="4" style="text-align:center;">لا توجد سجلات لهذا الشهر</td></tr>' : recordRows.toString()}
           </tbody>
         </table>
+
+        <div style="margin-top: 50px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
+          <div style="border-top: 1px solid #ccc; text-align: center; padding-top: 10px;">توقيع المعلم</div>
+          <div style="border-top: 1px solid #ccc; text-align: center; padding-top: 10px;">ختم وتوقيع الإدارة</div>
+        </div>
       ''',
     );
 
-    FileExporter.printHtmlReport(html, 'تقرير_طالب_${student.name}_$_selectedMonth');
+    FileExporter.printHtmlReport(html, 'تقرير_طالب_${studentName}_$_selectedMonth');
   }
 
   String _buildBaseHtmlReport({required String title, required String subtitle, required String content}) {
@@ -329,28 +333,28 @@ class _ReportsScreenState extends State<ReportsScreen> {
   <meta charset="UTF-8">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
   <style>
-    body { font-family: 'Cairo', sans-serif; background-color: #f4f7f5; padding: 40px; color: #15201b; }
+    body { font-family: 'Cairo', sans-serif; background-color: #fff; padding: 40px; color: #15201b; }
     .header { text-align: center; border-bottom: 3px double #053e2a; padding-bottom: 20px; margin-bottom: 30px; }
-    .header h1 { color: #053e2a; margin: 0; }
+    .header h1 { color: #053e2a; margin: 0; font-size: 28px; }
     .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
-    .meta-card { background: white; padding: 15px; border-radius: 8px; border-right: 4px solid #c5a880; }
+    .meta-card { background: #f9fbf9; padding: 15px; border-radius: 8px; border-right: 4px solid #c5a880; }
     .meta-card h3 { margin: 0; font-size: 12px; color: #42524a; }
-    .meta-card p { margin: 5px 0 0 0; font-weight: bold; color: #053e2a; }
-    table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; }
-    th { background: #053e2a; color: white; padding: 12px; text-align: right; }
-    td { padding: 10px; border-bottom: 1px solid #eef2ef; }
-    @media print { body { background: white; padding: 0; } }
+    .meta-card p { margin: 5px 0 0 0; font-weight: bold; color: #053e2a; font-size: 16px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; border: 1px solid #eef2ef; }
+    th { background: #053e2a; color: white; padding: 12px; text-align: right; font-size: 14px; }
+    td { padding: 10px; border-bottom: 1px solid #eef2ef; font-size: 13px; }
+    @media print { body { padding: 20px; } .no-print { display: none; } }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>أكاديمية إتقان لتحفيظ القرآن</h1>
-    <p>$title</p>
-    <p style="font-size: 14px; color: #666;">$subtitle</p>
+    <div style="font-size: 12px; color: #666; margin-bottom: 10px;">المملكة العربية السعودية<br>أكاديمية إتقان لعلوم القرآن</div>
+    <h1>$title</h1>
+    <p style="font-size: 14px; color: #053e2a; font-weight: bold; margin-top: 10px;">$subtitle</p>
   </div>
   $content
-  <div style="text-align: center; margin-top: 50px; font-size: 10px; color: #aaa;">
-    تم إنشاء هذا التقرير تلقائياً بواسطة نظام أكاديمية إتقان - ${DateTime.now().toString()}
+  <div style="text-align: center; margin-top: 60px; font-size: 10px; color: #aaa;">
+    تم إنشاء هذا التقرير تلقائياً بواسطة نظام أكاديمية إتقان لإدارة الحلقات - ${DateTime.now().toString().split('.')[0]}
   </div>
   <script>window.onload = function() { window.print(); };</script>
 </body>

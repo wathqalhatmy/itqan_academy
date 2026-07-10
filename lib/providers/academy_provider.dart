@@ -437,4 +437,14 @@ class AcademyProvider extends ChangeNotifier {
     if (score >= AppConstants.goodThreshold)      return EvaluationGrade.good;
     return EvaluationGrade.acceptable;
   }
+
+  // --- تقارير ذكية معتمدة على السيرفر ---
+  
+  Future<List<dynamic>> getCircleMonthlyStats(String circleId, int year, int month) async {
+    return await _repository.getCircleMonthlyStats(circleId, year, month);
+  }
+
+  Future<Map<String, dynamic>> getStudentMonthlyReportDetails(String studentId, int year, int month) async {
+    return await _repository.getStudentMonthlyReportDetails(studentId, year, month);
+  }
 }

@@ -277,4 +277,24 @@ class MockRepository implements AcademyRepository {
       }
     }
   }
+
+  @override
+  Future<List<dynamic>> getCircleMonthlyStats(String circleId, int year, int month) async {
+    return [];
+  }
+
+  @override
+  Future<Map<String, dynamic>> getStudentMonthlyReportDetails(String studentId, int year, int month) async {
+    return {
+      'studentName': 'طالب تجريبي',
+      'behaviorRating': 5.0,
+      'summary': {
+        'attendanceRate': 100,
+        'memorizationCount': 10,
+        'revisionCount': 5,
+        'avgGrade': 4.0,
+      },
+      'dailyLogs': []
+    };
+  }
 }
