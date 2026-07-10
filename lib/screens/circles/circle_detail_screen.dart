@@ -532,8 +532,8 @@ class _CircleDetailScreenState extends State<CircleDetailScreen> {
                 showDeleteStudentDialog(context, provider, student);
               }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem(
+            itemBuilder: (context) => [
+              const PopupMenuItem(
                 value: 'remove',
                 child: Row(children: [
                   Icon(Icons.link_off_rounded, color: Colors.orange, size: 18),
@@ -542,16 +542,17 @@ class _CircleDetailScreenState extends State<CircleDetailScreen> {
                       style: TextStyle(fontSize: 13)),
                 ]),
               ),
-              PopupMenuItem(
-                value: 'delete',
-                child: Row(children: [
-                  Icon(Icons.delete_forever_rounded,
-                      color: Colors.red, size: 18),
-                  SizedBox(width: 8),
-                  Text('حذف الطالب نهائياً',
-                      style: TextStyle(fontSize: 13, color: Colors.red)),
-                ]),
-              ),
+              if (Provider.of<AuthProvider>(context, listen: false).isAdmin)
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(children: [
+                    Icon(Icons.delete_forever_rounded,
+                        color: Colors.red, size: 18),
+                    SizedBox(width: 8),
+                    Text('حذف الطالب نهائياً',
+                        style: TextStyle(fontSize: 13, color: Colors.red)),
+                  ]),
+                ),
             ],
           ),
         ],

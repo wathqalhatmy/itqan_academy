@@ -205,19 +205,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
 
                     const SizedBox(height: 24),
-                    _buildUnassignedSection(context, provider),
+                    if (Provider.of<AuthProvider>(context, listen: false).isAdmin)
+                      _buildUnassignedSection(context, provider),
                   ],
                 ),
               ),
             ),
-            floatingActionButton: FloatingActionButton.extended(
-              onPressed: () => _showAddCircleDialog(context, provider),
-              backgroundColor: colorScheme.primary,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add),
-              label: const Text('إضافة حلقة جديدة',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
+            floatingActionButton: Provider.of<AuthProvider>(context, listen: false).isAdmin 
+              ? FloatingActionButton.extended(
+                  onPressed: () => _showAddCircleDialog(context, provider),
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  icon: const Icon(Icons.add),
+                  label: const Text('إضافة حلقة جديدة',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                )
+              : null,
           ),
         );
       },

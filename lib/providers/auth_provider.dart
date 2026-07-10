@@ -15,11 +15,14 @@ class AuthProvider extends ChangeNotifier {
 
   AuthStatus _status = AuthStatus.checking;
   String? _userName;
+  String? _role;
   String? _token;
 
   AuthStatus get status => _status;
   String? get userName => _userName;
+  String? get role => _role;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
+  bool get isAdmin => _role == 'ADMIN';
 
   AuthProvider() {
     _apiClient.onSessionExpired = () {
@@ -34,6 +37,7 @@ class AuthProvider extends ChangeNotifier {
       if (_token != null) {
         _status = AuthStatus.authenticated;
         _userName = await _storage.read(key: 'user_name') ?? 'مستخدم';
+        _role = await _storage.read(key: 'user_role') ?? 'TEACHER';
       } else {
         _status = AuthStatus.unauthenticated;
       }
@@ -59,13 +63,16 @@ class AuthProvider extends ChangeNotifier {
         final token = response.data['access'];
         final refreshToken = response.data['refresh'];
         final userDisplayName = response.data['name'] ?? 'مستخدم';
+        final userRole = response.data['role'] ?? 'TEACHER';
         
         await _storage.write(key: 'jwt_token', value: token);
         await _storage.write(key: 'refresh_token', value: refreshToken);
         await _storage.write(key: 'user_name', value: userDisplayName);
+        await _storage.write(key: 'user_role', value: userRole);
         
         _token = token;
         _userName = userDisplayName;
+        _role = userRole;
         _status = AuthStatus.authenticated;
         notifyListeners();
         return true;
@@ -83,8 +90,10 @@ class AuthProvider extends ChangeNotifier {
     await _storage.delete(key: 'jwt_token');
     await _storage.delete(key: 'refresh_token');
     await _storage.delete(key: 'user_name');
+    await _storage.delete(key: 'user_role');
     _token = null;
     _userName = null;
+    _role = null;
     _status = AuthStatus.unauthenticated;
     notifyListeners();
   }
