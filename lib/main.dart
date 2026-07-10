@@ -11,8 +11,11 @@ void main() {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AcademyProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, AcademyProvider>(
+          create: (_) => AcademyProvider(),
+          update: (_, auth, academy) => academy!..updateAuth(auth),
+        ),
       ],
       child: const ItqanAcademyApp(),
     ),
@@ -63,11 +66,88 @@ class ItqanAcademyAppState extends State<ItqanAcademyApp> {
       // الشاشة الرئيسية للتطبيق مع حماية الدخول
       home: Consumer<AuthProvider>(
         builder: (context, auth, _) {
+          if (auth.status == AuthStatus.checking) {
+            return const LoadingSplashScreen();
+          }
           if (auth.isAuthenticated) {
             return const DashboardScreen();
           }
           return const LoginScreen();
         },
+      ),
+    );
+  }
+}
+
+class LoadingSplashScreen extends StatelessWidget {
+  const LoadingSplashScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final colorScheme = theme.colorScheme;
+
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isDark
+                ? [AppTheme.backgroundDark, colorScheme.primaryContainer.withValues(alpha: 0.1)]
+                : [colorScheme.primary, colorScheme.primaryContainer],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: isDark ? 0.05 : 0.2),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                ),
+                child: Icon(
+                  Icons.menu_book_rounded,
+                  size: 80,
+                  color: isDark ? colorScheme.primary : Colors.white,
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'أكاديمية إتقان',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'جاري التحقق من الهوية...',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 48),
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: CircularProgressIndicator(
+                  color: isDark ? colorScheme.primary : Colors.white,
+                  strokeWidth: 3,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

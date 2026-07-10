@@ -49,12 +49,20 @@ class Circle {
     };
   }
 
+  static List<String> _parseStudentIds(dynamic jsonVal) {
+    if (jsonVal == null) return const [];
+    if (jsonVal is List) {
+      return jsonVal.map((e) => e.toString()).toList();
+    }
+    return [jsonVal.toString()];
+  }
+
   factory Circle.fromJson(Map<String, dynamic> json) {
     return Circle(
       id: json['id'] as String,
       name: json['name'] as String,
       teacherName: json['teacherName'] as String,
-      studentIds: (json['studentIds'] as List<dynamic>?)?.map((e) => e as String).toList() ?? const [],
+      studentIds: _parseStudentIds(json['studentIds']),
       level: CircleLevel.values.firstWhere(
         (e) => e.name == json['level'],
         orElse: () => CircleLevel.memorization,

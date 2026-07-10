@@ -95,26 +95,11 @@ class _EditNotesAndBehaviorDialogState
           onPressed: () => Navigator.pop(context),
           child: const Text('إلغاء'),
         ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: theme.colorScheme.primary,
-            foregroundColor: Colors.white,
-          ),
-          onPressed: () {
-            widget.provider.updateStudentNotesAndBehavior(
-              widget.student.id,
-              _notesController.text.trim(),
-              _behaviorRating,
-            );
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('تم تحديث بيانات الطالب بنجاح'),
-                backgroundColor: Colors.green,
-              ),
-            );
-          },
-          child: const Text('حفظ التغييرات'),
+        _EditStudentSaveButton(
+          provider: widget.provider,
+          studentId: widget.student.id,
+          notesController: _notesController,
+          behaviorRating: _behaviorRating,
         ),
       ],
     );
@@ -169,43 +154,11 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
   ];
 
   final _lettersList = [
-    'أ',
-    'ب',
-    'ت',
-    'ث',
-    'ج',
-    'ح',
-    'خ',
-    'د',
-    'ذ',
-    'ر',
-    'ز',
-    'س',
-    'ش',
-    'ص',
-    'ض',
-    'ط',
-    'ظ',
-    'ع',
-    'غ',
-    'ف',
-    'ق',
-    'ك',
-    'ل',
-    'م',
-    'ن',
-    'هـ',
-    'و',
-    'ي'
+    'أ', 'ب', 'ت', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س', 'ش', 'ص', 'ض', 'ط', 'ظ', 'ع', 'غ', 'ف', 'ق', 'ك', 'ل', 'م', 'ن', 'هـ', 'و', 'ي'
   ];
 
   final _rulesList = [
-    'حركة الفتحة',
-    'حركة الضمة',
-    'حركة الكسرة',
-    'حكم السكون',
-    'أحكام التنوين',
-    'حكم الشدّة'
+    'حركة الفتحة', 'حركة الضمة', 'حركة الكسرة', 'حكم السكون', 'أحكام التنوين', 'حكم الشدّة'
   ];
 
   @override
@@ -246,7 +199,6 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final level = widget.circle.level;
 
     String titleText = 'تسجيل إنجاز يومي جديد';
@@ -331,8 +283,8 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
                       const EdgeInsets.only(top: 6.0, right: 4.0, bottom: 12.0),
                   child: Text(
                     'عدد آيات سورة $_selectedSurah: $_maxVerses آية',
-                    style: TextStyle(
-                      color: theme.colorScheme.primary,
+                    style: const TextStyle(
+                      color: Colors.teal,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
@@ -504,7 +456,6 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
                 ),
               ],
               const SizedBox(height: 16),
-              // حقل الملاحظات الخاصة بالتقييم المضاف حديثاً بناء على طلب المستخدم
               TextFormField(
                 controller: _recordNotesController,
                 maxLines: 2,
@@ -531,59 +482,22 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('إلغاء'),
         ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: theme.colorScheme.primary,
-            foregroundColor: Colors.white,
-          ),
-          onPressed: () {
-            if (_formKey.currentState!.validate()) {
-              final String evaluationNotes = _recordNotesController.text.trim();
-              if (level == CircleLevel.memorization) {
-                widget.provider.addStudentRecord(
-                  studentId: widget.studentId,
-                  circleId: widget.circle.id,
-                  type: _selectedType,
-                  surahName: _selectedSurah,
-                  fromVerse: int.parse(_fromController.text),
-                  toVerse: int.parse(_toController.text),
-                  grade: _selectedGrade,
-                  notes: evaluationNotes.isNotEmpty ? evaluationNotes : null,
-                );
-              } else if (level == CircleLevel.tajweed) {
-                widget.provider.addStudentRecord(
-                  studentId: widget.studentId,
-                  circleId: widget.circle.id,
-                  type: RecordType.recitation,
-                  surahName: _selectedSurah,
-                  fromVerse: int.parse(_fromController.text),
-                  toVerse: int.parse(_toController.text),
-                  tajweedRules: _selectedTajweedRule,
-                  grade: _selectedGrade,
-                  notes: evaluationNotes.isNotEmpty ? evaluationNotes : null,
-                );
-              } else if (level == CircleLevel.alphabets) {
-                widget.provider.addStudentRecord(
-                  studentId: widget.studentId,
-                  circleId: widget.circle.id,
-                  type: RecordType.alphabets,
-                  lessonName:
-                      _isLetterLesson ? 'حرف $_selectedLetter' : _selectedRule,
-                  pageNumber: int.parse(_pageController.text),
-                  grade: _selectedGrade,
-                  notes: evaluationNotes.isNotEmpty ? evaluationNotes : null,
-                );
-              }
-
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('تم تسجيل الإنجاز اليومي بنجاح'),
-                    backgroundColor: Colors.green),
-              );
-            }
-          },
-          child: const Text('تسجيل'),
+        _AddRecordSaveButton(
+          provider: widget.provider,
+          studentId: widget.studentId,
+          circle: widget.circle,
+          formKey: _formKey,
+          type: _selectedType,
+          surah: _selectedSurah,
+          from: _fromController,
+          to: _toController,
+          tajweed: _selectedTajweedRule,
+          letter: _selectedLetter,
+          rule: _selectedRule,
+          page: _pageController,
+          notes: _recordNotesController,
+          grade: _selectedGrade,
+          isLetterLesson: _isLetterLesson,
         ),
       ],
     );
@@ -642,7 +556,6 @@ class _AddTestDialogState extends State<AddTestDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: const Text('تسجيل اختبار جزء جديد',
@@ -726,23 +639,258 @@ class _AddTestDialogState extends State<AddTestDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('إلغاء'),
         ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: theme.colorScheme.primary,
-            foregroundColor: Colors.white,
-          ),
-          onPressed: () {
-            if (_formKey.currentState!.validate()) {
-              final String testNotes = _testNotesController.text.trim();
-              widget.provider.addStudentJuzTest(
+        _AddTestSaveButton(
+          provider: widget.provider,
+          studentId: widget.studentId,
+          circle: widget.circle,
+          formKey: _formKey,
+          juz: _selectedJuz,
+          score: _scoreController,
+          grade: _selectedGrade,
+          tester: _testerController,
+          notes: _testNotesController,
+        ),
+      ],
+    );
+  }
+}
+
+// ==========================================
+// أزرار الحفظ المخصصة مع مؤشرات تحميل
+// ==========================================
+
+class _EditStudentSaveButton extends StatefulWidget {
+  final AcademyProvider provider;
+  final String studentId;
+  final TextEditingController notesController;
+  final double behaviorRating;
+
+  const _EditStudentSaveButton({
+    required this.provider,
+    required this.studentId,
+    required this.notesController,
+    required this.behaviorRating,
+  });
+
+  @override
+  State<_EditStudentSaveButton> createState() => _EditStudentSaveButtonState();
+}
+
+class _EditStudentSaveButtonState extends State<_EditStudentSaveButton> {
+  bool _isSaving = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: Colors.white,
+      ),
+      onPressed: _isSaving ? null : () async {
+        setState(() => _isSaving = true);
+        try {
+          await widget.provider.updateStudentNotesAndBehavior(
+            widget.studentId,
+            widget.notesController.text.trim(),
+            widget.behaviorRating,
+          );
+          if (context.mounted) {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('تم تحديث بيانات الطالب بنجاح'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) setState(() => _isSaving = false);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+            );
+          }
+        }
+      },
+      child: _isSaving 
+        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+        : const Text('حفظ التغييرات'),
+    );
+  }
+}
+
+class _AddRecordSaveButton extends StatefulWidget {
+  final AcademyProvider provider;
+  final String studentId;
+  final Circle circle;
+  final GlobalKey<FormState> formKey;
+  final RecordType type;
+  final String surah;
+  final TextEditingController from;
+  final TextEditingController to;
+  final String tajweed;
+  final String letter;
+  final String rule;
+  final TextEditingController page;
+  final TextEditingController notes;
+  final EvaluationGrade grade;
+  final bool isLetterLesson;
+
+  const _AddRecordSaveButton({
+    required this.provider,
+    required this.studentId,
+    required this.circle,
+    required this.formKey,
+    required this.type,
+    required this.surah,
+    required this.from,
+    required this.to,
+    required this.tajweed,
+    required this.letter,
+    required this.rule,
+    required this.page,
+    required this.notes,
+    required this.grade,
+    required this.isLetterLesson,
+  });
+
+  @override
+  State<_AddRecordSaveButton> createState() => _AddRecordSaveButtonState();
+}
+
+class _AddRecordSaveButtonState extends State<_AddRecordSaveButton> {
+  bool _isSaving = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final level = widget.circle.level;
+
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: Colors.white,
+      ),
+      onPressed: _isSaving ? null : () async {
+        if (widget.formKey.currentState!.validate()) {
+          setState(() => _isSaving = true);
+          try {
+            final String evaluationNotes = widget.notes.text.trim();
+            if (level == CircleLevel.memorization) {
+              await widget.provider.addStudentRecord(
                 studentId: widget.studentId,
                 circleId: widget.circle.id,
-                juzNumber: _selectedJuz,
-                score: double.parse(_scoreController.text),
-                grade: _selectedGrade,
-                testerName: _testerController.text.trim(),
-                notes: testNotes.isNotEmpty ? testNotes : null,
+                type: widget.type,
+                surahName: widget.surah,
+                fromVerse: int.parse(widget.from.text),
+                toVerse: int.parse(widget.to.text),
+                grade: widget.grade,
+                notes: evaluationNotes.isNotEmpty ? evaluationNotes : null,
               );
+            } else if (level == CircleLevel.tajweed) {
+              await widget.provider.addStudentRecord(
+                studentId: widget.studentId,
+                circleId: widget.circle.id,
+                type: RecordType.recitation,
+                surahName: widget.surah,
+                fromVerse: int.parse(widget.from.text),
+                toVerse: int.parse(widget.to.text),
+                tajweedRules: widget.tajweed,
+                grade: widget.grade,
+                notes: evaluationNotes.isNotEmpty ? evaluationNotes : null,
+              );
+            } else if (level == CircleLevel.alphabets) {
+              await widget.provider.addStudentRecord(
+                studentId: widget.studentId,
+                circleId: widget.circle.id,
+                type: RecordType.alphabets,
+                lessonName:
+                    widget.isLetterLesson ? 'حرف ${widget.letter}' : widget.rule,
+                pageNumber: int.parse(widget.page.text),
+                grade: widget.grade,
+                notes: evaluationNotes.isNotEmpty ? evaluationNotes : null,
+              );
+            }
+
+            if (context.mounted) {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                    content: Text('تم تسجيل الإنجاز اليومي بنجاح'),
+                    backgroundColor: Colors.green),
+              );
+            }
+          } catch (e) {
+            if (mounted) setState(() => _isSaving = false);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+              );
+            }
+          }
+        }
+      },
+      child: _isSaving 
+        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+        : const Text('تسجيل'),
+    );
+  }
+}
+
+class _AddTestSaveButton extends StatefulWidget {
+  final AcademyProvider provider;
+  final String studentId;
+  final Circle circle;
+  final GlobalKey<FormState> formKey;
+  final int juz;
+  final TextEditingController score;
+  final EvaluationGrade grade;
+  final TextEditingController tester;
+  final TextEditingController notes;
+
+  const _AddTestSaveButton({
+    required this.provider,
+    required this.studentId,
+    required this.circle,
+    required this.formKey,
+    required this.juz,
+    required this.score,
+    required this.grade,
+    required this.tester,
+    required this.notes,
+  });
+
+  @override
+  State<_AddTestSaveButton> createState() => _AddTestSaveButtonState();
+}
+
+class _AddTestSaveButtonState extends State<_AddTestSaveButton> {
+  bool _isSaving = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: Colors.white,
+      ),
+      onPressed: _isSaving ? null : () async {
+        if (widget.formKey.currentState!.validate()) {
+          setState(() => _isSaving = true);
+          try {
+            final String testNotes = widget.notes.text.trim();
+            await widget.provider.addStudentJuzTest(
+              studentId: widget.studentId,
+              circleId: widget.circle.id,
+              juzNumber: widget.juz,
+              score: double.parse(widget.score.text),
+              grade: widget.grade,
+              testerName: widget.tester.text.trim(),
+              notes: testNotes.isNotEmpty ? testNotes : null,
+            );
+            if (context.mounted) {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -750,10 +898,19 @@ class _AddTestDialogState extends State<AddTestDialog> {
                     backgroundColor: Colors.green),
               );
             }
-          },
-          child: const Text('تسجيل الاختبار'),
-        ),
-      ],
+          } catch (e) {
+            if (mounted) setState(() => _isSaving = false);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+              );
+            }
+          }
+        }
+      },
+      child: _isSaving 
+        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+        : const Text('تسجيل الاختبار'),
     );
   }
 }

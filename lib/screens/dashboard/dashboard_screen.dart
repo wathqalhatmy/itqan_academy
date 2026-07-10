@@ -567,23 +567,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
               TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: const Text('إلغاء')),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: Colors.white),
-                onPressed: () {
-                  if (formKey.currentState!.validate()) {
-                    provider.addCircle(nameController.text.trim(),
-                        teacherController.text.trim(), selectedLevel);
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('تمت إضافة الحلقة بنجاح'),
-                          backgroundColor: AppTheme.primaryLight),
-                    );
-                  }
-                },
-                child: const Text('إضافة'),
+              StatefulBuilder(
+                builder: (context, setBtnState) {
+                  // سنقوم بتعريف الحالة داخل الـ StatefulBuilder ولكن سنستخدمها بشكل صحيح
+                  // لاحظ: لمنع إعادة التصفير، يجب أن تكون المتغيرات جزءاً من حالة الـ StatefulBuilder نفسه
+                  // أو نستخدم متغير خارجي إذا كان الحوار بسيطاً.
+                  return _AddCircleButton(
+                    provider: provider,
+                    nameController: nameController,
+                    teacherController: teacherController,
+                    selectedLevel: selectedLevel,
+                    formKey: formKey,
+                  );
+                }
               ),
             ],
           );
@@ -732,6 +728,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AddCircleButton extends StatefulWidget {
+  final AcademyProvider provider;
+  final TextEditingController nameController;
+  final TextEditingController teacherController;
+  final CircleLevel selectedLevel;
+  final GlobalKey<FormState> formKey;
+
+  const _AddCircleButton({
+    required this.provider,
+    required this.nameController,
+    required this.teacherController,
+    required this.selectedLevel,
+    required this.formKey,
+  });
+
+  @override
+  State<_AddCircleButton> createState() => _AddCircleButtonState();
+}
+
+class _AddCircleButtonState extends State<_AddCircleButton> {
+  bool _isSaving = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+          backgroundColor: theme.colorScheme.primary,
+          foregroundColor: Colors.white),
+      onPressed: _isSaving ? null : () async {
+        if (widget.formKey.currentState!.validate()) {
+          setState(() => _isSaving = true);
+          try {
+            await widget.provider.addCircle(
+              widget.nameController.text.trim(),
+              widget.teacherController.text.trim(),
+              widget.selectedLevel,
+            );
+            if (context.mounted) {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                    content: Text('تمت إضافة الحلقة بنجاح'),
+                    backgroundColor: AppTheme.primaryLight),
+              );
+            }
+          } catch (e) {
+            if (mounted) setState(() => _isSaving = false);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+              );
+            }
+          }
+        }
+      },
+      child: _isSaving 
+        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+        : const Text('إضافة'),
     );
   }
 }

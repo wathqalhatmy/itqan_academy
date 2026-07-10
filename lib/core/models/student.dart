@@ -78,13 +78,28 @@ class Student {
     };
   }
 
+  static List<int> _parseCompletedJuz(dynamic jsonVal) {
+    if (jsonVal == null) return const [];
+    if (jsonVal is List) {
+      return jsonVal.map((e) => int.tryParse(e.toString()) ?? 0).where((e) => e != 0).toList();
+    }
+    if (jsonVal is int) {
+      return [jsonVal];
+    }
+    if (jsonVal is String) {
+      final parsed = int.tryParse(jsonVal);
+      if (parsed != null) return [parsed];
+    }
+    return const [];
+  }
+
   factory Student.fromJson(Map<String, dynamic> json) {
     return Student(
       id: json['id'] as String,
       name: json['name'] as String,
       notes: json['notes'] as String? ?? '',
       behaviorRating: (json['behaviorRating'] as num?)?.toDouble() ?? 5.0,
-      completedJuz: (json['completedJuz'] as List<dynamic>?)?.map((e) => e as int).toList() ?? const [],
+      completedJuz: _parseCompletedJuz(json['completedJuz']),
       age: json['age'] as int?,
       phoneNumber: json['phoneNumber'] as String?,
       status: StudentStatusExt.fromString(json['status'] as String?),

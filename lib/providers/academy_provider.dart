@@ -7,6 +7,7 @@ import '../core/models/memorization_record.dart';
 import '../core/models/juz_test.dart';
 import '../data/repositories/academy_repository.dart';
 import '../data/repositories/django_repository.dart';
+import 'auth_provider.dart';
 
 class AcademyProvider extends ChangeNotifier {
   final AcademyRepository _repository = DjangoRepository();
@@ -14,6 +15,7 @@ class AcademyProvider extends ChangeNotifier {
   List<Circle> _circles = [];
   List<Student> _students = [];
   Circle? _selectedCircle;
+  bool _hasLoadedData = false;
   
   // بيانات مساعدة (Caches) لتجنب الـ Future في الواجهات
   final Map<String, List<Student>> _circleStudentsCache = {};
@@ -34,22 +36,45 @@ class AcademyProvider extends ChangeNotifier {
   }
 
   AcademyProvider() {
-    refreshData();
+    // إزالة refreshData من هنا لحماية الطلبات عند بدء التشغيل
+  }
+
+  void updateAuth(AuthProvider auth) {
+    if (auth.isAuthenticated) {
+      if (!_hasLoadedData) {
+        _hasLoadedData = true;
+        refreshData();
+      }
+    } else {
+      _hasLoadedData = false;
+      _circles = [];
+      _students = [];
+      _selectedCircle = null;
+      _circleStudentsCache.clear();
+      _studentRecordsCache.clear();
+      _studentTestsCache.clear();
+      _studentAttendanceCache.clear();
+      notifyListeners();
+    }
   }
 
   Future<void> refreshData() async {
-    _circles = await _repository.getCircles();
-    _students = await _repository.getStudents();
-    if (_selectedCircle != null) {
-      _selectedCircle = await _repository.getCircleById(_selectedCircle!.id);
+    try {
+      _circles = await _repository.getCircles();
+      _students = await _repository.getStudents();
+      if (_selectedCircle != null) {
+        _selectedCircle = await _repository.getCircleById(_selectedCircle!.id);
+      }
+      
+      // تحديث الكاش الأساسي للطلاب لكل حلقة بالتوازي لتسريع بدء تشغيل التطبيق
+      await Future.wait(_circles.map((circle) async {
+        _circleStudentsCache[circle.id] = await _repository.getStudentsForCircle(circle.id);
+      }));
+      
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ Error refreshing data in AcademyProvider: $e');
     }
-    
-    // تحديث الكاش الأساسي للطلاب لكل حلقة
-    for (var circle in _circles) {
-      _circleStudentsCache[circle.id] = await _repository.getStudentsForCircle(circle.id);
-    }
-    
-    notifyListeners();
   }
 
   // دوال وصول سريعة للبيانات من الكاش
@@ -59,10 +84,14 @@ class AcademyProvider extends ChangeNotifier {
   List<Attendance> getAttendanceForStudent(String studentId) => _studentAttendanceCache[studentId] ?? [];
 
   Future<void> loadStudentDetails(String studentId) async {
-    _studentRecordsCache[studentId] = await _repository.getRecordsForStudent(studentId);
-    _studentTestsCache[studentId] = await _repository.getTestsForStudent(studentId);
-    _studentAttendanceCache[studentId] = await _repository.getAttendanceForStudent(studentId);
-    notifyListeners();
+    try {
+      _studentRecordsCache[studentId] = await _repository.getRecordsForStudent(studentId);
+      _studentTestsCache[studentId] = await _repository.getTestsForStudent(studentId);
+      _studentAttendanceCache[studentId] = await _repository.getAttendanceForStudent(studentId);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ Error loading student details: $e');
+    }
   }
 
   void selectCircle(Circle? circle) {
@@ -72,15 +101,19 @@ class AcademyProvider extends ChangeNotifier {
 
   // --- إدارة الحلقات ---
   Future<void> addCircle(String name, String teacherName, CircleLevel level) async {
-    final newCircle = Circle(
-      id: 'c_${DateTime.now().millisecondsSinceEpoch}',
-      name: name,
-      teacherName: teacherName,
-      studentIds: [],
-      level: level,
-    );
-    await _repository.addCircle(newCircle);
-    await refreshData();
+    try {
+      final newCircle = Circle(
+        id: 'c_${DateTime.now().millisecondsSinceEpoch}',
+        name: name,
+        teacherName: teacherName,
+        studentIds: [],
+        level: level,
+      );
+      await _repository.addCircle(newCircle);
+      await refreshData();
+    } catch (e) {
+      debugPrint('❌ Error adding circle: $e');
+    }
   }
 
   // --- إدارة الطلاب ---
@@ -92,84 +125,107 @@ class AcademyProvider extends ChangeNotifier {
     required StudentStatus status,
     String notes = '',
   }) async {
-    final studentId = 's_${DateTime.now().millisecondsSinceEpoch}';
-    final newStudent = Student(
-      id: studentId,
-      name: name,
-      notes: notes,
-      age: age,
-      phoneNumber: phoneNumber,
-      status: status,
-      behaviorRating: 5.0,
-      completedJuz: [],
-    );
+    try {
+      final studentId = 's_${DateTime.now().millisecondsSinceEpoch}';
+      final newStudent = Student(
+        id: studentId,
+        name: name,
+        notes: notes,
+        age: age,
+        phoneNumber: phoneNumber,
+        status: status,
+        behaviorRating: 5.0,
+        completedJuz: [],
+      );
 
-    await _repository.addStudent(newStudent);
+      // استلام كائن الطالب بعد حفظه حاملاً معرّف السيرفر الحقيقي (مثل "1")
+      final createdStudent = await _repository.addStudent(newStudent);
 
-    final circle = await _repository.getCircleById(circleId);
-    if (circle != null) {
-      final updatedIds = List<String>.from(circle.studentIds)..add(studentId);
-      await _repository.updateCircle(circle.copyWith(studentIds: updatedIds));
+      final circle = await _repository.getCircleById(circleId);
+      if (circle != null) {
+        // نستخدم معرّف قاعدة البيانات الحقيقي المرجّع من السيرفر لربطه بالحلقة بنجاح
+        final updatedIds = List<String>.from(circle.studentIds)..add(createdStudent.id);
+        await _repository.updateCircle(circle.copyWith(studentIds: updatedIds));
+      }
+      await refreshData();
+    } catch (e) {
+      debugPrint('❌ Error adding student to circle: $e');
     }
-    await refreshData();
   }
 
   Future<void> assignStudentToCircle(String studentId, String circleId) async {
-    for (var circle in _circles) {
-      if (circle.studentIds.contains(studentId)) {
-        final updatedIds = List<String>.from(circle.studentIds)..remove(studentId);
-        await _repository.updateCircle(circle.copyWith(studentIds: updatedIds));
+    try {
+      for (var circle in _circles) {
+        if (circle.studentIds.contains(studentId)) {
+          final updatedIds = List<String>.from(circle.studentIds)..remove(studentId);
+          await _repository.updateCircle(circle.copyWith(studentIds: updatedIds));
+        }
       }
-    }
 
-    final targetCircle = await _repository.getCircleById(circleId);
-    if (targetCircle != null) {
-      final updatedIds = List<String>.from(targetCircle.studentIds)..add(studentId);
-      await _repository.updateCircle(targetCircle.copyWith(studentIds: updatedIds));
-    }
+      final targetCircle = await _repository.getCircleById(circleId);
+      if (targetCircle != null) {
+        final updatedIds = List<String>.from(targetCircle.studentIds)..add(studentId);
+        await _repository.updateCircle(targetCircle.copyWith(studentIds: updatedIds));
+      }
 
-    await refreshData();
+      await refreshData();
+    } catch (e) {
+      debugPrint('❌ Error assigning student to circle: $e');
+    }
   }
 
   Future<void> updateStudentNotesAndBehavior(String studentId, String notes, double behaviorRating) async {
-    final student = await _repository.getStudentById(studentId);
-    if (student != null) {
-      await _repository.updateStudent(student.copyWith(notes: notes, behaviorRating: behaviorRating));
-      await refreshData();
-      await loadStudentDetails(studentId);
+    try {
+      final student = await _repository.getStudentById(studentId);
+      if (student != null) {
+        await _repository.updateStudent(student.copyWith(notes: notes, behaviorRating: behaviorRating));
+        await refreshData();
+        await loadStudentDetails(studentId);
+      }
+    } catch (e) {
+      debugPrint('❌ Error updating student notes and behavior: $e');
     }
   }
 
   // --- إدارة الحضور والغياب ---
   Future<List<Attendance>> getAttendanceForDateAndCircle(String circleId, DateTime date) async {
-    final normalizedDate = DateTime(date.year, date.month, date.day);
-    final savedList = await _repository.getAttendanceForDateAndCircle(circleId, normalizedDate);
-    final circleStudents = getStudentsForCircle(circleId);
+    try {
+      final normalizedDate = DateTime(date.year, date.month, date.day);
+      final savedList = await _repository.getAttendanceForDateAndCircle(circleId, normalizedDate);
+      final circleStudents = getStudentsForCircle(circleId);
 
-    return circleStudents.map((student) {
-      final existingIndex = savedList.indexWhere((a) => a.studentId == student.id);
-      if (existingIndex != -1) {
-        return savedList[existingIndex];
-      } else {
-        return Attendance(
-          id: 'att_${student.id}_${normalizedDate.millisecondsSinceEpoch}',
-          studentId: student.id,
-          circleId: circleId,
-          date: normalizedDate,
-          status: AttendanceStatus.unmarked,
-          arrivalTime: null,
-        );
-      }
-    }).toList();
+      return circleStudents.map((student) {
+        final existingIndex = savedList.indexWhere((a) => a.studentId == student.id);
+        if (existingIndex != -1) {
+          return savedList[existingIndex];
+        } else {
+          return Attendance(
+            id: 'att_${student.id}_${normalizedDate.millisecondsSinceEpoch}',
+            studentId: student.id,
+            circleId: circleId,
+            date: normalizedDate,
+            status: AttendanceStatus.unmarked,
+            arrivalTime: null,
+          );
+        }
+      }).toList();
+    } catch (e) {
+      debugPrint('❌ Error getting attendance for date and circle: $e');
+      return [];
+    }
   }
 
   Future<void> saveCircleAttendance(List<Attendance> attendances) async {
-    await _repository.saveAttendance(attendances);
-    // تحديث الكاش للطلاب المتأثرين
-    for (var a in attendances) {
-       _studentAttendanceCache[a.studentId] = await _repository.getAttendanceForStudent(a.studentId);
+    try {
+      await _repository.saveAttendance(attendances);
+      // تحديث الكاش للطلاب المتأثرين
+      for (var a in attendances) {
+         _studentAttendanceCache[a.studentId] = await _repository.getAttendanceForStudent(a.studentId);
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ Error saving circle attendance: $e');
     }
-    notifyListeners();
   }
 
   Map<String, Map<AttendanceStatus, int>> getMonthlyAttendanceStats(String circleId, int year, int month) {
@@ -210,23 +266,27 @@ class AcademyProvider extends ChangeNotifier {
   }
 
   Future<void> markAllAsPresent(String circleId, DateTime date) async {
-    final students = getStudentsForCircle(circleId);
-    final normalizedDate = DateTime(date.year, date.month, date.day);
-    
-    final List<Attendance> attendanceList = students.map((s) => Attendance(
-      id: 'att_${s.id}_${normalizedDate.millisecondsSinceEpoch}',
-      studentId: s.id,
-      circleId: circleId,
-      date: normalizedDate,
-      status: AttendanceStatus.present,
-      arrivalTime: DateTime(normalizedDate.year, normalizedDate.month, normalizedDate.day, 16, 0),
-    )).toList();
+    try {
+      final students = getStudentsForCircle(circleId);
+      final normalizedDate = DateTime(date.year, date.month, date.day);
+      
+      final List<Attendance> attendanceList = students.map((s) => Attendance(
+        id: 'att_${s.id}_${normalizedDate.millisecondsSinceEpoch}',
+        studentId: s.id,
+        circleId: circleId,
+        date: normalizedDate,
+        status: AttendanceStatus.present,
+        arrivalTime: DateTime(normalizedDate.year, normalizedDate.month, normalizedDate.day, 16, 0),
+      )).toList();
 
-    await _repository.saveAttendance(attendanceList);
-    for (var s in students) {
-       _studentAttendanceCache[s.id] = await _repository.getAttendanceForStudent(s.id);
+      await _repository.saveAttendance(attendanceList);
+      for (var s in students) {
+         _studentAttendanceCache[s.id] = await _repository.getAttendanceForStudent(s.id);
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ Error marking all present: $e');
     }
-    notifyListeners();
   }
 
   Map<String, dynamic> getStudentMonthlyPerformance(String studentId, int year, int month) {
@@ -274,24 +334,28 @@ class AcademyProvider extends ChangeNotifier {
   }) async {
     if (circleId.isEmpty) return;
 
-    final record = MemorizationRecord(
-      id: 'rec_${DateTime.now().millisecondsSinceEpoch}',
-      studentId: studentId,
-      circleId: circleId,
-      date: DateTime.now(),
-      type: type,
-      surahName: surahName,
-      fromVerse: fromVerse,
-      toVerse: toVerse,
-      lessonName: lessonName,
-      pageNumber: pageNumber,
-      tajweedRules: tajweedRules,
-      grade: grade,
-      notes: notes,
-    );
-    await _repository.addMemorizationRecord(record);
-    _studentRecordsCache[studentId] = await _repository.getRecordsForStudent(studentId);
-    notifyListeners();
+    try {
+      final record = MemorizationRecord(
+        id: 'rec_${DateTime.now().millisecondsSinceEpoch}',
+        studentId: studentId,
+        circleId: circleId,
+        date: DateTime.now(),
+        type: type,
+        surahName: surahName,
+        fromVerse: fromVerse,
+        toVerse: toVerse,
+        lessonName: lessonName,
+        pageNumber: pageNumber,
+        tajweedRules: tajweedRules,
+        grade: grade,
+        notes: notes,
+      );
+      await _repository.addMemorizationRecord(record);
+      _studentRecordsCache[studentId] = await _repository.getRecordsForStudent(studentId);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ Error adding student record: $e');
+    }
   }
 
   Future<void> addStudentJuzTest({
@@ -305,45 +369,65 @@ class AcademyProvider extends ChangeNotifier {
   }) async {
     if (circleId.isEmpty) return;
 
-    final test = JuzTest(
-      id: 'test_${DateTime.now().millisecondsSinceEpoch}',
-      studentId: studentId,
-      circleId: circleId,
-      date: DateTime.now(),
-      juzNumber: juzNumber,
-      score: score,
-      grade: grade,
-      testerName: testerName,
-      notes: notes,
-    );
-    await _repository.addJuzTest(test);
-    _studentTestsCache[studentId] = await _repository.getTestsForStudent(studentId);
-    await refreshData();
+    try {
+      final test = JuzTest(
+        id: 'test_${DateTime.now().millisecondsSinceEpoch}',
+        studentId: studentId,
+        circleId: circleId,
+        date: DateTime.now(),
+        juzNumber: juzNumber,
+        score: score,
+        grade: grade,
+        testerName: testerName,
+        notes: notes,
+      );
+      await _repository.addJuzTest(test);
+      _studentTestsCache[studentId] = await _repository.getTestsForStudent(studentId);
+      await refreshData();
+    } catch (e) {
+      debugPrint('❌ Error adding student juz test: $e');
+    }
   }
 
   Future<void> deleteCircle(String circleId) async {
-    await _repository.deleteCircle(circleId);
-    if (_selectedCircle?.id == circleId) {
-      _selectedCircle = null;
+    try {
+      await _repository.deleteCircle(circleId);
+      if (_selectedCircle?.id == circleId) {
+        _selectedCircle = null;
+      }
+      await refreshData();
+    } catch (e) {
+      debugPrint('❌ Error deleting circle: $e');
     }
-    await refreshData();
   }
 
   Future<void> removeStudentFromCircle(String circleId, String studentId) async {
-    await _repository.removeStudentFromCircle(circleId, studentId);
-    await refreshData();
+    try {
+      await _repository.removeStudentFromCircle(circleId, studentId);
+      await refreshData();
+    } catch (e) {
+      debugPrint('❌ Error removing student from circle: $e');
+    }
   }
 
   Future<void> deleteStudentPermanently(String studentId) async {
-    await _repository.deleteStudentPermanently(studentId);
-    await refreshData();
+    try {
+      await _repository.deleteStudentPermanently(studentId);
+      await refreshData();
+    } catch (e) {
+      debugPrint('❌ Error deleting student permanently: $e');
+    }
   }
 
   Future<void> updateCircle(String circleId, String name, String teacherName, CircleLevel level) async {
-    final circle = await _repository.getCircleById(circleId);
-    if (circle != null) {
-      await _repository.updateCircle(circle.copyWith(name: name, teacherName: teacherName, level: level));
-      await refreshData();
+    try {
+      final circle = await _repository.getCircleById(circleId);
+      if (circle != null) {
+        await _repository.updateCircle(circle.copyWith(name: name, teacherName: teacherName, level: level));
+        await refreshData();
+      }
+    } catch (e) {
+      debugPrint('❌ Error updating circle: $e');
     }
   }
 

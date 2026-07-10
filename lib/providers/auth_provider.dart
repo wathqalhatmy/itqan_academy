@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../data/services/api_client.dart';
 
 enum AuthStatus {
+  checking,
   unauthenticated,
   authenticating,
   authenticated,
@@ -12,7 +13,7 @@ class AuthProvider extends ChangeNotifier {
   final _storage = const FlutterSecureStorage();
   final _apiClient = ApiClient();
 
-  AuthStatus _status = AuthStatus.unauthenticated;
+  AuthStatus _status = AuthStatus.checking;
   String? _userName;
   String? _token;
 
@@ -21,16 +22,26 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _status == AuthStatus.authenticated;
 
   AuthProvider() {
+    _apiClient.onSessionExpired = () {
+      logout();
+    };
     _checkExistingToken();
   }
 
   Future<void> _checkExistingToken() async {
-    _token = await _storage.read(key: 'jwt_token');
-    if (_token != null) {
-      _status = AuthStatus.authenticated;
-      _userName = await _storage.read(key: 'user_name') ?? 'مستخدم';
-      notifyListeners();
+    try {
+      _token = await _storage.read(key: 'jwt_token');
+      if (_token != null) {
+        _status = AuthStatus.authenticated;
+        _userName = await _storage.read(key: 'user_name') ?? 'مستخدم';
+      } else {
+        _status = AuthStatus.unauthenticated;
+      }
+    } catch (e) {
+      debugPrint('Error checking existing token: $e');
+      _status = AuthStatus.unauthenticated;
     }
+    notifyListeners();
   }
 
   Future<bool> login(String email, String password) async {
@@ -46,11 +57,11 @@ class AuthProvider extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         final token = response.data['access'];
-        // جلب اسم المستخدم من الـ payload الخاص بالتوكن أو عبر طلب منفصل
-        // للتبسيط حالياً سنستخدم 'مدير الأكاديمية'
-        const userDisplayName = 'مدير الأكاديمية';
+        final refreshToken = response.data['refresh'];
+        final userDisplayName = response.data['name'] ?? 'مستخدم';
         
         await _storage.write(key: 'jwt_token', value: token);
+        await _storage.write(key: 'refresh_token', value: refreshToken);
         await _storage.write(key: 'user_name', value: userDisplayName);
         
         _token = token;
@@ -69,7 +80,9 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    await _storage.deleteAll();
+    await _storage.delete(key: 'jwt_token');
+    await _storage.delete(key: 'refresh_token');
+    await _storage.delete(key: 'user_name');
     _token = null;
     _userName = null;
     _status = AuthStatus.unauthenticated;

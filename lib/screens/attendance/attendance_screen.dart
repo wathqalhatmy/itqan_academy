@@ -20,6 +20,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   final Map<String, TimeOfDay> _tempArrivalTimes = {};
   final Map<String, String> _tempNotes = {}; // لتخزين الملاحظات مؤقتاً
   bool _hasUnsavedChanges = false;
+  bool _isSaving = false;
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -269,43 +270,66 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         SizedBox(
                           width: double.infinity,
                           height: 50,
-                          child: ElevatedButton(
+                          child: Consumer<AcademyProvider>(
+                        builder: (context, provider, _) {
+                          return ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: colorScheme.primary,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               elevation: 3,
                             ),
-                            onPressed: () {
-                              final normalizedSelectedDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-                              final updatedList = allStudents.map((s) {
-                                final status = _tempStatuses[s.id] ?? AttendanceStatus.unmarked;
-                                final time = _tempArrivalTimes[s.id] ?? TimeOfDay.now();
-                                final note = _tempNotes[s.id];
-                                final arrivalDateTime = (status == AttendanceStatus.present || status == AttendanceStatus.late)
-                                    ? DateTime(normalizedSelectedDate.year, normalizedSelectedDate.month, normalizedSelectedDate.day, time.hour, time.minute)
-                                    : null;
+                            onPressed: _isSaving ? null : () async {
+                              setState(() => _isSaving = true);
+                              try {
+                                final normalizedSelectedDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+                                final updatedList = allStudents.map((s) {
+                                  final status = _tempStatuses[s.id] ?? AttendanceStatus.unmarked;
+                                  final time = _tempArrivalTimes[s.id] ?? TimeOfDay.now();
+                                  final note = _tempNotes[s.id];
+                                  final arrivalDateTime = (status == AttendanceStatus.present || status == AttendanceStatus.late)
+                                      ? DateTime(normalizedSelectedDate.year, normalizedSelectedDate.month, normalizedSelectedDate.day, time.hour, time.minute)
+                                      : null;
 
-                                return Attendance(
-                                  id: 'att_${s.id}_${normalizedSelectedDate.millisecondsSinceEpoch}',
-                                  studentId: s.id,
-                                  circleId: circle!.id,
-                                  date: normalizedSelectedDate,
-                                  status: status,
-                                  arrivalTime: arrivalDateTime,
-                                  note: note,
-                                );
-                              }).toList();
+                                  return Attendance(
+                                    id: 'att_${s.id}_${normalizedSelectedDate.millisecondsSinceEpoch}',
+                                    studentId: s.id,
+                                    circleId: circle!.id,
+                                    date: normalizedSelectedDate,
+                                    status: status,
+                                    arrivalTime: arrivalDateTime,
+                                    note: note,
+                                  );
+                                }).toList();
 
-                              provider.saveCircleAttendance(updatedList);
-                              setState(() => _hasUnsavedChanges = false);
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('تم حفظ التحضير بنجاح'), backgroundColor: Colors.green),
-                              );
+                                await provider.saveCircleAttendance(updatedList);
+                                if (mounted) {
+                                  setState(() {
+                                    _hasUnsavedChanges = false;
+                                    _isSaving = false;
+                                  });
+                                }
+                                if (context.mounted) {
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('تم حفظ التحضير بنجاح'), backgroundColor: Colors.green),
+                                  );
+                                }
+                              } catch (e) {
+                                if (mounted) setState(() => _isSaving = false);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('خطأ أثناء الحفظ: $e'), backgroundColor: Colors.red),
+                                  );
+                                }
+                              }
                             },
-                            child: const Text('حفظ التعديلات', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                          ),
+                            child: _isSaving 
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('حفظ التعديلات', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          );
+                        }
+                    ),
                         ),
                       ],
                     ),

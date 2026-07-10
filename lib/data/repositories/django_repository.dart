@@ -55,8 +55,9 @@ class DjangoRepository implements AcademyRepository {
   }
 
   @override
-  Future<void> addStudent(Student student) async {
-    await _apiClient.post('/students/', data: student.toJson());
+  Future<Student> addStudent(Student student) async {
+    final response = await _apiClient.post('/students/', data: student.toJson());
+    return Student.fromJson(response.data);
   }
 
   @override

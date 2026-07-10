@@ -17,7 +17,7 @@ abstract class AcademyRepository {
   Future<List<Student>> getStudents();
   Future<List<Student>> getStudentsForCircle(String circleId);
   Future<Student?> getStudentById(String id);
-  Future<void> addStudent(Student student);
+  Future<Student> addStudent(Student student);
   Future<void> updateStudent(Student student);
   Future<void> deleteStudentPermanently(String studentId);
   Future<void> removeStudentFromCircle(String circleId, String studentId);

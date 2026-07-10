@@ -178,8 +178,9 @@ class MockRepository implements AcademyRepository {
   }
 
   @override
-  Future<void> addStudent(Student student) async {
+  Future<Student> addStudent(Student student) async {
     _students.add(student);
+    return student;
   }
 
   @override
