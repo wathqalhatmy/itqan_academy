@@ -12,6 +12,7 @@ import '../../providers/academy_provider.dart';
 import '../attendance/attendance_screen.dart';
 import '../students/student_detail_screen.dart';
 import '../reports/reports_screen.dart';
+import '../../providers/auth_provider.dart';
 import 'widgets/circle_dialogs.dart';
 
 class CircleDetailScreen extends StatefulWidget {
